@@ -9,5 +9,5 @@ Scripts currently available:
 
 Shortly available:
 - velocityAutocorrelation.py (calculates velocity autocorrelations, needs a dump file with granular output)
-
+- template scripts for different sorts of alchemical simulations
  
