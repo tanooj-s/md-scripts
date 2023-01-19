@@ -1,0 +1,10 @@
+# ignore all files used for testing
+*.log
+*.npy
+*.dump
+*.in
+*.lattice
+*.data
+*.csv
+*.txt
+*.ipynb
