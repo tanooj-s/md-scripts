@@ -1,3 +1,5 @@
+# read in a dump file, calculate RDFs for specified pairs of atom types
+# output a numpy array of shape (1+nTypes, nbins)
 
 import argparse
 import numpy as np
@@ -21,9 +23,10 @@ pairs = []
 while len(pairtokens) > 0:
 	pairs.append(pairtokens[:2])
 	pairtokens = pairtokens[2:]
-# output array will be of shape (1+nPairs, nbins)
+
+print(f'Pairs to calculate g(r) for: {pairs}')
 # iterate over pairs 
-# for each pair, calculate pairCorrelation(pair0, pair1, L, r)
+# for each pair, calculate pairCorrelation(pair0_atoms, pair1_atoms, L, r)
 
 def purge(tokens): return [t for t in tokens if len(t) >= 1]
 
@@ -59,12 +62,12 @@ def pairCorrelation(atomsA,atomsB,L,r):
 	# normalization
 	shellV = 4*np.pi*np.power(r,2)*dr # 4πr2dr
 	V = L[0]*L[1]*L[2]
-	igRho = (len(atomsA)+len(atomsB))/V
+	#igRho = (len(atomsA)+len(atomsB))/V
 	rhoA = len(atomsA)/V # number density of A
 	rhoB = len(atomsB)/V # number density of B
-	gr /= shellV # normalize by volume of spherical shell at each bin 
-	gr /= rhoB # normalize by number density of "other" atoms
-	gr /= len(atomsA) # normalize by number of "self" atoms 
+	gr /= shellV # volume of spherical shell at each bin 
+	gr /= rhoB # number density of "other" atoms
+	gr /= len(atomsA) # number of "self" atoms 
 	return gr
 
 
@@ -74,10 +77,8 @@ tsHeadIdxs = []
 nHeadIdxs = []
 boxHeadIdxs = []
 atomHeadIdxs = []
-
 with open(args.input,'r') as f: lines = f.readlines()
 lines = [l.strip('\n') for l in lines]
-
 linecounter = 0
 for line in lines:
 	if line.startswith("ITEM: TIMESTEP"): tsHeadIdxs.append(linecounter)
@@ -88,22 +89,19 @@ for line in lines:
 
 boxBoundLines = []
 atomLines = []
-
 nAtoms = int(lines[nHeadIdxs[0]+1]) # no grand canonical shenanigans
-# choose length of trajectory to analyze based on timesteps 
-nUse = int(0.8*len(tsHeadIdxs))
-# choose fraction based on number of timesteps 
+nUse = int(0.8*len(tsHeadIdxs)) # choose length of trajectory to analyze, might want to make this a flag
 tsHeadIdxs = tsHeadIdxs[nUse:]
 nHeadIdxs = nHeadIdxs[nUse:]
 boxHeadIdxs = boxHeadIdxs[nUse:]
 atomHeadIdxs = atomHeadIdxs[nUse:]
-
 print(f"Timesteps to average g(r) over: {len(tsHeadIdxs)}")
 
 for idx in boxHeadIdxs:
 	boxBoundLines.append(lines[idx+1:idx+4])
 for idx in atomHeadIdxs:
 	atomLines.append(lines[idx+1:idx+nAtoms+1])
+
 
 #  ---- infer dump format from first atom header ----
 atomHeader = lines[atomHeadIdxs[0]].split(' ')
@@ -113,7 +111,6 @@ xIdx = atomHeader.index('x') - 2
 yIdx = atomHeader.index('y') - 2
 zIdx = atomHeader.index('z') - 2
 print(f'Dump format: {atomHeader}')
-
 
 
 # ---- initial pass over box dims to obtain nbins ----
@@ -135,16 +132,14 @@ rLim /= 2 # half minimum box dim
 print(f"Generating g(r) up to r={rLim}")
 nbins = int(rLim/dr) + 1
 print(f"Number of bins: {nbins}")
-
-
-
-r = dr*np.arange(0.001,nbins,1) # x axis of histograms
+rs = dr*np.arange(0.001,nbins,1) # x axis of histograms
 rdfs = np.zeros((len(pairs), nbins)) # output array
 # print out which pairs are which row in output array
 for idx, pair in enumerate(pairs):
-	print(f'Row {idx+1} | Types {pair[0]} {pair[1]}') # 0 will be zs
+	print(f'Row {idx+1} | Types {pair[0]} {pair[1]}') # 0 will be rs
 
-# need a map to grab only which types and positions are needed to calculate at each timestep
+
+# ---- create typeMap to only grab positions of relevant atom types at each timestep ----
 relevantTypes = list(set(pairstring.split(' ')))
 relevantTypes = [int(t) for t in relevantTypes]
 print(relevantTypes)
@@ -152,14 +147,10 @@ typeMap = {}
 for idx, t in enumerate(relevantTypes):
 	typeMap[t] = idx
 
-# ------------------------------------
-# loop through frames of interest and get RDFs at each frame
 
+# ---- loop through frames of interest, calculate g(r) ---
 print("Reading ensemble trajectory to calculate pair correlations...")
-
 for idx in tqdm(tsHeadIdxs):
-
-
 	timestep = int(lines[idx+1])
 	nAtoms = int(lines[idx+3])
 	atomlines = lines[idx+9:idx+9+nAtoms]	
@@ -171,11 +162,9 @@ for idx in tqdm(tsHeadIdxs):
 	xLo, xHi = float(xDimLine.split(' ')[0]), float(xDimLine.split(' ')[1])
 	yLo, yHi = float(yDimLine.split(' ')[0]), float(yDimLine.split(' ')[1])
 	zLo, zHi = float(zDimLine.split(' ')[0]), float(zDimLine.split(' ')[1])
-	
-
 	# at each timestep, create an array of atom objects for each relevant type 
 	# then iterate over pairs, grab pair0 and pair1 from the array of positions
-	# need to map indices of the atoms array to what type it is 
+	# need to map indices of the atoms array to each relevant atom type 
 	atoms = []
 	for t in relevantTypes:
 		atoms.append([])
@@ -186,22 +175,16 @@ for idx in tqdm(tsHeadIdxs):
 		if aType in relevantTypes:
 			atoms[typeMap[aType]].append(Atom(atomID=aID,atomType=aType,x=x,y=y,z=z))
 
-
-	#print(atoms)
-	#print(typeMap)
-	#print(atoms[typeMap])
-
 	for pair in pairs:
 		type1_atoms = atoms[typeMap[int(pair[0])]]
 		type2_atoms = atoms[typeMap[int(pair[1])]]
 		idx = pairs.index(pair)
 		start = time.time()
-		rdfs[idx] = pairCorrelation(type1_atoms, type2_atoms, L, r)
-		print(f'{round(time.time()-start)}s for g{pair[0]}{pair[1]}(r)')
-
+		rdfs[idx] = pairCorrelation(type1_atoms, type2_atoms, L, rs)
+		print(f'{round(time.time()-start,4)}s for g{pair[0]}{pair[1]}(r)')
 
 # append rs
-assert len(r) == rdfs.shape[1]
-r = np.reshape(r, (1, rdfs.shape[1]))
-rdfs = np.concatenate((r,rdfs))
+assert len(rs) == rdfs.shape[1]
+rs = np.reshape(rs, (1, rdfs.shape[1]))
+rdfs = np.concatenate((rs,rdfs))
 with open(args.output,'wb') as f: np.save(f, rdfs)
