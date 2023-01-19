@@ -7,7 +7,7 @@ Scripts currently available:
 - wettingCircles.py (calculates wetting angle from a dump file)
 
 Shortly available:
-- pairCorrelation.py (calculates pair distribution functions for given pairs of atom types, needs a dump file)
+- pairCorrelation.py (calculates radial pair distribution functions for given pairs of atom types, needs a dump file)
 - velocityAutocorrelation.py (calculates velocity autocorrelations, needs a dump file with granular output)
 
  
