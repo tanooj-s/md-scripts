@@ -1,30 +1,13 @@
-# build out bond topology for a molecular mechanics force field (i.e. something like CHARMM) for use in LAMMPS
-# (this is essentially an alternative and more customizable version of VMD's topotools)
+# add bonded interactions to a carbon lattice
+# initial lattice is assumed to be generated via atomsk, a LAMMPS input script or any other method that generates a periodic lattice
 
-# this reads in a LAMMPS datafile with just atomic coordinates and generates an output file with bonds, angles and dihedrals
+# add angles and bonds for water as well here
 
-# take in strings from user for definitions of bonds, angles and dihedrals
-# bonds defined by iterating over pairs of atoms and finding which are some minimum distance from each other
-# angles defined by iterating over pairs of bonds and finding which share 1 common atom
-# dihedrals defined by iterating over pairs of angles, finding which have 4 distinct atoms and different middle atoms 
+# we know the topology we want for this system
 
-
-# flags to pass in when running script
-# e.g. if there are 2 bonds in a system
-# bond type 1 between atom type 1 and 2 with r0 = 1.2
-# bond type 2 between atom types 5 and 5 with r0 = 1.45
-# you would pass in  
-# -b '1 1 2 2 5 5' and -t '1.2 1.45' when running this script
-# similar for angles and dihedrals e.g. -a '1 2 1 2' for an H-O-H angle, -d '1 5 5 5 5' for a C-C-C-C dihedral
-
-# (this is a fairly slow script since O(n**2) in python)
-
-# (input strings for specific Drude oscillator solution with graphene)
-# -b '1 1 2 2 1 3 3 1 4 4 5 6 5 7 8 6 9 9'
-# -a '1 2 1 2 2 9 9 9' 
-# -d '1 9 9 9 9'
-# -t '1.2 0.25 0.12 0.12 0.12 1.45'
-
+# 2 bond types - O-H and C-C
+# 2 angle types - H-O-H and C-C-C
+# 1 dihedral type - C-C-C-C
 
 
 import numpy as np
@@ -36,13 +19,15 @@ parser = argparse.ArgumentParser(description="add bond, angle and dihedral conne
 parser.add_argument("-i", action="store", dest="infile")
 parser.add_argument("-o", action="store", dest="outfile")
 parser.add_argument("-b", action="store", dest="bonds", const='y', nargs='?') # string of bond types
-parser.add_argument("-a", action="store", dest="angles", const='y', nargs='?') # y or n to create angles, default is yes
-parser.add_argument("-d", action="store", dest="dihedrals", const='y', nargs='?') # y or n to create dihedrals, default is yes
-parser.add_argument("-t", action="store", dest="thresholds", const='y', nargs='?') # list of min dist thresholds for each 2-bond, throw an error if not consistent with bond string input 
+parser.add_argument("-a", action="store", dest="angles", const='y', nargs='?') # pass in an empty string '' if no angles
+parser.add_argument("-d", action="store", dest="dihedrals", const='y', nargs='?') # pass in an empty string '' if no dihedrals
+parser.add_argument("-t", action="store", dest="thresholds", const='y', nargs='?') # list of min dist thresholds for each 2-bond, throw an error if not consistent with bond type info 
 args = parser.parse_args()
 
+# add args for atom types to generate bonds for
 
-def purge(tokens): return [t for t in tokens if len(t) >= 1] # purge all empty strings from token lists
+# purge all empty strings from token lists
+def purge(tokens): return [t for t in tokens if len(t) >= 1]
 
 
 def minimumImage(r):
@@ -94,29 +79,16 @@ class Dihedral:
 
 
 # ---- parse args for user-specified bond definitions ----
-
-bondString = args.bonds
-angleString = args.angles
-dihedralString = args.dihedrals
-thresholds = [float(t) for t in args.thresholds.split(' ')]
 infile = args.infile
 
+bondString = args.bonds
 bondTokens = [int(t) for t in bondString.split(' ')]
-angleTokens = [int(t) for t in angleString.split(' ')]
-dihedralTokens = [int(t) for t in dihedralString.split(' ')]
-
 # populate dicts from user-specified bond definitions
 bondDefs = {} # e.g. {1: [1,2], 2: [6,7]} bond type 1 between atom types 1 and 2, bond type 2 between atom types 6 and 7
-angleDefs = {}
-dihedralDefs = {}
-
 for i in range(len(bondTokens)-2):
 	if i % 3 == 0: bondDefs[bondTokens[i]] = [bondTokens[i+1], bondTokens[i+2]]
-for i in range(len(angleTokens)-3):
-	if i % 4 == 0: angleDefs[angleTokens[i]] = [angleTokens[i+1], angleTokens[i+2], angleTokens[i+3]]
-for i in range(len(dihedralTokens)-4):
-	if i % 5 == 0: dihedralDefs[dihedralTokens[i]] = [dihedralTokens[i+1], dihedralTokens[i+2], dihedralTokens[i+3], dihedralTokens[i+4]]
 
+thresholds = [float(t) for t in args.thresholds.split(' ')]
 assert len(thresholds) == len(bondDefs.keys())
 
 
@@ -159,12 +131,14 @@ with open(infile,'r') as f:
 lines = [l.strip('\n') for l in lines]
 mass_start = lines.index('Masses')
 atomstart = lines.index('Atoms # full')
-atomend = lines.index('Velocities') if 'Velocities' in lines else len(lines)
+atomend = lines.index('Bonds') if 'Bonds' in lines else len(lines)
+#atomend = lines.index('Velocities') if 'Velocities' in lines else len(lines)
 
 for line in lines[mass_start:atomstart]:
 		tokens = purge(line.split(' '))
 		if len(tokens) > 1:
 			masses.append([int(tokens[0]), float(tokens[1])])
+
 
 for line in lines[atomstart:atomend]:
 	tokens = purge(line.split(' '))
@@ -215,7 +189,7 @@ for bType, [aType1, aType2] in bondDefs.items():
 					bondCounter += 1
 	tCounter += 1
 end = time.time()
-print("Took %s to find and create 2-bonds"%(str(end-start)))
+print(f"Took {end-start} to find and create 2-bonds")
 print(f'{len(bonds)} bonds created')
 
 
@@ -228,63 +202,72 @@ print(f'{len(bonds)} bonds created')
 
 # iterate over pairs of bonds
 # find bond pairs where the total number of distinct atoms is 3 
-# use the common atom as the middle (shared) atom of the angle 
+# use the common atom as the center (shared) atom of the angle 
 
 # create a list of atom triplets that satisfy the above criteria
 # find atom triplets that satisfy the criterion used to define each angle type
 
-print('Angle definitions')
-print(angleDefs)
-print('Iterating over pairs of 2-bonds...')
+angleString = args.angles
+if len(angleString) > 0:
+	angleTokens = [int(t) for t in angleString.split(' ')]
+	angleDefs = {}
+	for i in range(len(angleTokens)-3):
+		if i % 4 == 0: angleDefs[angleTokens[i]] = [angleTokens[i+1], angleTokens[i+2], angleTokens[i+3]]
 
-start = time.time()
-if args.angles != 'n': # figure out how to handle these edge cases appropriately
-	angleCounter = 1
-	for bond_i in bonds:
-		for bond_j in bonds:
-			sharedAtom = 0 # atom shared by the two bonds
-			leftAtom = 0
-			rightAtom = 0 # left/right are arbitrary
-			atomTriplets = [] # add triplets in order here - left, shared, right
 
-			if bond_i.bond_id < bond_j.bond_id:
-				distinctAtoms = list(set([bond_i.atom1.atom_id,bond_i.atom2.atom_id,bond_j.atom1.atom_id,bond_j.atom2.atom_id]))
-				if len(distinctAtoms) == 3:
-					angleAtomTypes = [str(atomMap[a].atom_type) for a in distinctAtoms]					
-					if (bond_i.atom1.atom_id == bond_j.atom1.atom_id):
-						sharedAtom = bond_i.atom1
-						leftAtom = bond_i.atom2
-						rightAtom = bond_j.atom2						
-					elif (bond_i.atom2.atom_id == bond_j.atom1.atom_id):
-						sharedAtom = bond_i.atom2
-						leftAtom = bond_i.atom1
-						rightAtom = bond_j.atom2						
-					elif (bond_i.atom1.atom_id == bond_j.atom2.atom_id):
-						sharedAtom = bond_i.atom1
-						leftAtom = bond_i.atom2
-						rightAtom = bond_j.atom1						
-					elif (bond_i.atom2.atom_id == bond_j.atom2.atom_id):
-						sharedAtom = bond_i.atom2
-						leftAtom = bond_i.atom1
-						rightAtom = bond_j.atom1						
-					atomTriplets.append([leftAtom, sharedAtom, rightAtom])
-          
+	print('Angle definitions')
+	print(angleDefs)
+	print('Iterating over pairs of 2-bonds...')
 
-					for angType, [aType1, aType2, aType3] in angleDefs.items():
-						for [leftAtom, sharedAtom, rightAtom] in atomTriplets: # ideally you only want to iterate over this list of triplets once 
-							if (leftAtom.atom_type == aType1) and (sharedAtom.atom_type == aType2) and (rightAtom.atom_type == aType3):
-								angles.append(Angle(angle_id=angleCounter,
-													angle_type=angType,
-													bond1=bond_i,
-													bond2=bond_j,
-													leftAtom=leftAtom,
-													sharedAtom=sharedAtom,
-													rightAtom=rightAtom))
-								angleCounter += 1
+	start = time.time()
+	if args.angles != 'n': # figure out how to handle these edge cases appropriately
+		angleCounter = 1
+		for bond_i in bonds:
+			for bond_j in bonds:
+				sharedAtom = 0 # atom shared by the two bonds
+				leftAtom = 0
+				rightAtom = 0 # left/right are arbitrary
+				atomTriplets = [] # add triplets in order here - left, shared, right
 
-end = time.time()
-print("Took %s to find and create 3-bonds"%(str(end-start)))
-print(f'{len(angles)} 3-bonds (angles) created')
+				if bond_i.bond_id < bond_j.bond_id:
+					distinctAtoms = list(set([bond_i.atom1.atom_id,bond_i.atom2.atom_id,bond_j.atom1.atom_id,bond_j.atom2.atom_id]))
+					if len(distinctAtoms) == 3:
+						angleAtomTypes = [str(atomMap[a].atom_type) for a in distinctAtoms]					
+						if (bond_i.atom1.atom_id == bond_j.atom1.atom_id):
+							sharedAtom = bond_i.atom1
+							leftAtom = bond_i.atom2
+							rightAtom = bond_j.atom2						
+						elif (bond_i.atom2.atom_id == bond_j.atom1.atom_id):
+							sharedAtom = bond_i.atom2
+							leftAtom = bond_i.atom1
+							rightAtom = bond_j.atom2						
+						elif (bond_i.atom1.atom_id == bond_j.atom2.atom_id):
+							sharedAtom = bond_i.atom1
+							leftAtom = bond_i.atom2
+							rightAtom = bond_j.atom1						
+						elif (bond_i.atom2.atom_id == bond_j.atom2.atom_id):
+							sharedAtom = bond_i.atom2
+							leftAtom = bond_i.atom1
+							rightAtom = bond_j.atom1						
+						atomTriplets.append([leftAtom, sharedAtom, rightAtom])
+
+						# need a snippet to make sure there aren't duplicates?
+
+						for angType, [aType1, aType2, aType3] in angleDefs.items():
+							for [leftAtom, sharedAtom, rightAtom] in atomTriplets: # ideally you only want to iterate over this list of triplets once 
+								if (leftAtom.atom_type == aType1) and (sharedAtom.atom_type == aType2) and (rightAtom.atom_type == aType3):
+									angles.append(Angle(angle_id=angleCounter,
+														angle_type=angType,
+														bond1=bond_i,
+														bond2=bond_j,
+														leftAtom=leftAtom,
+														sharedAtom=sharedAtom,
+														rightAtom=rightAtom))
+									angleCounter += 1
+
+	end = time.time()
+	print(f"Took {end-start} to find and create 3-bonds")
+	print(f'{len(angles)} 3-bonds (angles) created')
 
 
 
@@ -312,61 +295,69 @@ print(f'{len(angles)} 3-bonds (angles) created')
 # if the middle (shared) atom of both angles is different then create a dihedral
 # create an atom quadruplets list for this, check types based on definition (same as for angles)
 
-print('Dihedral definitions')
-print(dihedralDefs)
-print('Iterating over pairs of 3-bonds...')
 
-start = time.time()
-if args.dihedrals != 'n':
-	dihedralCounter = 1
-	for angle_i in angles:
-		for angle_j in angles:
-			startAtom = 0
-			midAtom1 = 0
-			midAtom2 = 0
-			endAtom = 0
-			atomQuadruplets = []
+dihedralString = args.dihedrals
+if len(dihedralString) > 0:
+	dihedralTokens = [int(t) for t in dihedralString.split(' ')]
+	dihedralDefs = {}
+	for i in range(len(dihedralTokens)-4):
+		if i % 5 == 0: dihedralDefs[dihedralTokens[i]] = [dihedralTokens[i+1], dihedralTokens[i+2], dihedralTokens[i+3], dihedralTokens[i+4]]
 
-			if angle_i.angle_id < angle_j.angle_id:
-				angle_i_atoms = [angle_i.leftAtom, angle_i.sharedAtom, angle_i.rightAtom]
-				angle_j_atoms = [angle_j.leftAtom, angle_j.sharedAtom, angle_j.rightAtom]
-				distinctAtoms = list(set([angle_i.leftAtom.atom_id,
-										 angle_i.sharedAtom.atom_id,
-										 angle_i.rightAtom.atom_id,
-										 angle_j.leftAtom.atom_id,
-										 angle_j.sharedAtom.atom_id,
-										 angle_j.rightAtom.atom_id]))
+	print('Dihedral definitions')
+	print(dihedralDefs)
+	print('Iterating over pairs of 3-bonds...')
 
-				if (len(distinctAtoms) == 4) and (angle_i.sharedAtom != angle_j.sharedAtom): # 4 distinct atoms and different shared atom
-					if angle_i.leftAtom not in angle_j_atoms:
-					# then we know exactly which atom is which
-						startAtom = angle_i.leftAtom # note this means angle_i.rightAtom === angle_j.sharedAtom here
-						midAtom1 = angle_i.sharedAtom
-						midAtom2 = angle_i.rightAtom
-						endAtom = list(set(angle_j_atoms) - set(angle_i_atoms))[0] 
-					elif angle_i.rightAtom not in angle_j_atoms: 
-						startAtom = angle_i.rightAtom # angle_i.leftAtom === angle_j.sharedAtom here
-						midAtom1 = angle_i.sharedAtom
-						midAtom2 = angle_i.leftAtom
-						endAtom = list(set(angle_j_atoms) - set(angle_i_atoms))[0]
-					atomQuadruplets.append([startAtom, midAtom1, midAtom2, endAtom])
+	start = time.time()
+	if args.dihedrals != 'n':
+		dihedralCounter = 1
+		for angle_i in angles:
+			for angle_j in angles:
+				startAtom = 0
+				midAtom1 = 0
+				midAtom2 = 0
+				endAtom = 0
+				atomQuadruplets = []
 
-					for dhType, [aType1, aType2, aType3, aType4] in dihedralDefs.items():
-						for [startAtom, midAtom1, midAtom2, endAtom] in atomQuadruplets:
-							if (startAtom.atom_type == aType1) and (midAtom1.atom_type == aType2) and (midAtom2.atom_type == aType3) and (endAtom.atom_type == aType4):
-								dihedrals.append(Dihedral(dihedral_id=dihedralCounter,
-														  dihedral_type=dhType,
-														  angle1=angle_i,
-														  angle2=angle_j,
-														  startAtom=startAtom,
-														  midAtom1=midAtom1,
-														  midAtom2=midAtom2,
-														  endAtom=endAtom))
-								dihedralCounter += 1
+				if angle_i.angle_id < angle_j.angle_id:
+					angle_i_atoms = [angle_i.leftAtom, angle_i.sharedAtom, angle_i.rightAtom]
+					angle_j_atoms = [angle_j.leftAtom, angle_j.sharedAtom, angle_j.rightAtom]
+					distinctAtoms = list(set([angle_i.leftAtom.atom_id,
+											 angle_i.sharedAtom.atom_id,
+											 angle_i.rightAtom.atom_id,
+											 angle_j.leftAtom.atom_id,
+											 angle_j.sharedAtom.atom_id,
+											 angle_j.rightAtom.atom_id]))
 
-end = time.time()
-print("Took %s to find and create 4-bonds"%(str(end-start)))
-print(f'{len(dihedrals)} 4-bonds (dihedrals) created')
+					if (len(distinctAtoms) == 4) and (angle_i.sharedAtom != angle_j.sharedAtom): # 4 distinct atoms and different shared atom
+						if angle_i.leftAtom not in angle_j_atoms:
+						# then we know exactly which atom is which
+							startAtom = angle_i.leftAtom # note this means angle_i.rightAtom === angle_j.sharedAtom here
+							midAtom1 = angle_i.sharedAtom
+							midAtom2 = angle_i.rightAtom
+							endAtom = list(set(angle_j_atoms) - set(angle_i_atoms))[0] 
+						elif angle_i.rightAtom not in angle_j_atoms: 
+							startAtom = angle_i.rightAtom # angle_i.leftAtom === angle_j.sharedAtom here
+							midAtom1 = angle_i.sharedAtom
+							midAtom2 = angle_i.leftAtom
+							endAtom = list(set(angle_j_atoms) - set(angle_i_atoms))[0]
+						atomQuadruplets.append([startAtom, midAtom1, midAtom2, endAtom])
+
+						for dhType, [aType1, aType2, aType3, aType4] in dihedralDefs.items():
+							for [startAtom, midAtom1, midAtom2, endAtom] in atomQuadruplets:
+								if (startAtom.atom_type == aType1) and (midAtom1.atom_type == aType2) and (midAtom2.atom_type == aType3) and (endAtom.atom_type == aType4):
+									dihedrals.append(Dihedral(dihedral_id=dihedralCounter,
+															  dihedral_type=dhType,
+															  angle1=angle_i,
+															  angle2=angle_j,
+															  startAtom=startAtom,
+															  midAtom1=midAtom1,
+															  midAtom2=midAtom2,
+															  endAtom=endAtom))
+									dihedralCounter += 1
+
+	end = time.time()
+	print(f"Took {end-start} to find and create 4-bonds")
+	print(f'{len(dihedrals)} 4-bonds (dihedrals) created')
 	
 
 
@@ -379,13 +370,13 @@ with open(args.outfile,'w') as f:
 
 	f.write(f'{len(atoms)} atoms\n')
 	f.write(f'{len(bonds)} bonds\n')
-	f.write(f'{len(angles)} angles\n')
-	f.write(f'{len(dihedrals)} dihedrals\n')
+	if len(angleString) > 0: f.write(f'{len(angles)} angles\n')
+	if len(dihedralString) > 0: f.write(f'{len(dihedrals)} dihedrals\n')
 	f.write(f'{n_types} atom types\n')
 
 	f.write(f'{len(list(bondDefs.keys()))} bond types\n')
-	f.write(f'{len(list(angleDefs.keys()))} angle types\n')
-	f.write(f'{len(list(dihedralDefs.keys()))} dihedral types\n')
+	if len(angleString) > 0: f.write(f'{len(list(angleDefs.keys()))} angle types\n') 
+	if len(dihedralString) > 0: f.write(f'{len(list(dihedralDefs.keys()))} dihedral types\n') 
 
 	f.write(f'{bounds[0][0]} {bounds[0][1]} xlo xhi\n')
 	f.write(f'{bounds[1][0]} {bounds[1][1]} ylo yhi\n')
@@ -406,11 +397,18 @@ with open(args.outfile,'w') as f:
 		f.write(f'{b.bond_id} {b.bond_type} {b.atom1.atom_id} {b.atom2.atom_id} \n')
 	f.write('\n')
 
-	f.write('Angles\n\n')
-	for a in angles:
-		f.write(f'{a.angle_id} {a.angle_type} {a.leftAtom.atom_id} {a.sharedAtom.atom_id} {a.rightAtom.atom_id} \n')
-	f.write('\n')
+	if len(angleString) > 0:
+		f.write('Angles\n\n')
+		for a in angles:
+			f.write(f'{a.angle_id} {a.angle_type} {a.leftAtom.atom_id} {a.sharedAtom.atom_id} {a.rightAtom.atom_id} \n')
+		f.write('\n')
 
-	f.write('Dihedrals\n\n')
-	for d in dihedrals: 
-		f.write(f'{d.dihedral_id} {d.dihedral_type} {d.startAtom.atom_id} {d.midAtom1.atom_id} {d.midAtom2.atom_id} {d.endAtom.atom_id} \n')
+	if len(dihedralString) > 0:
+		f.write('Dihedrals\n\n')
+		for d in dihedrals: 
+			f.write(f'{d.dihedral_id} {d.dihedral_type} {d.startAtom.atom_id} {d.midAtom1.atom_id} {d.midAtom2.atom_id} {d.endAtom.atom_id} \n')
+
+
+
+
+
