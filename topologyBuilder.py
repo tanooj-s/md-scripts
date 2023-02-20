@@ -1,14 +1,29 @@
-# add bonded interactions to a carbon lattice
-# initial lattice is assumed to be generated via atomsk, a LAMMPS input script or any other method that generates a periodic lattice
+# build out bond topology for a molecular mechanics force field (i.e. something like CHARMM) for use in LAMMPS
+# (this is essentially an alternative and more customizable version of VMD's topotools)
 
-# add angles and bonds for water as well here
+# this reads in a LAMMPS datafile with just atomic coordinates and generates an output file with bonds, angles and dihedrals
 
-# we know the topology we want for this system
+# take in strings from user for definitions of bonds, angles and dihedrals
+# bonds defined by iterating over pairs of atoms and finding which are some minimum distance from each other
+# angles defined by iterating over pairs of bonds and finding which share 1 common atom
+# dihedrals defined by iterating over pairs of angles, finding which have 4 distinct atoms and different middle atoms 
 
-# 2 bond types - O-H and C-C
-# 2 angle types - H-O-H and C-C-C
-# 1 dihedral type - C-C-C-C
 
+# flags to pass in when running script
+# e.g. if there are 2 bonds in a system
+# bond type 1 between atom type 1 and 2 with r0 = 1.2
+# bond type 2 between atom types 5 and 5 with r0 = 1.45
+# you would pass in  
+# -b '1 1 2 2 5 5' and -t '1.2 1.45' when running this script
+# similar for angles and dihedrals e.g. -a '1 2 1 2' for an H-O-H angle, -d '1 5 5 5 5' for a C-C-C-C dihedral
+
+# (this is a slow script since O(n**2) in python so you should nohup it on a cluster)
+
+# (input strings for specific Drude oscillator solution with graphene)
+# -b '1 1 2 2 1 3 3 1 4 4 5 6 5 7 8 6 9 9'
+# -a '1 2 1 2 2 9 9 9' 
+# -d '1 9 9 9 9'
+# -t '1.2 0.25 0.12 0.12 0.12 1.45'
 
 import numpy as np
 import os
