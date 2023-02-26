@@ -4,7 +4,6 @@
 
 # slice closest to surface has a radius r0
 # the next slice has a radius r1 
-# <r1>  <  <r0> , but not every timestep
 # define dr = r0 - r1
 # calculate the wetting angle as arccos(dr/r0)
 
@@ -31,13 +30,19 @@ import argparse
 import numpy as np
 import time
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 parser = argparse.ArgumentParser(description="parse lammps dump file for wetting sims")
 parser.add_argument("-i", action="store", dest="input")
+parser.add_argument("-o", action="store", dest="output")
+parser.add_argument("-t", action="store", dest="droptypes") # atom types in droplet, pass in a string like '1 2 3'
 parser.add_argument("-dz", action="store", dest="dz")
 args = parser.parse_args()
 dz = float(args.dz)
+dropstring = args.droptypes
+
 def purge(tokens): return [t for t in tokens if len(t) >= 1]
+
 
 # ---- relevant functions go here ----
 def wettingAngle(slice0_coords, slice1_coords):
@@ -66,10 +71,10 @@ boxHeadIdxs = []
 atomHeadIdxs = []
 
 with open(args.input,'r') as f: lines = f.readlines()
-lines = [l.strip('\n') for l in lines]
+lines = [l.strip('\n') for l in tqdm(lines)]
 
 linecounter = 0
-for line in lines:
+for line in tqdm(lines):
 	if line.startswith("ITEM: TIMESTEP"): tsHeadIdxs.append(linecounter)
 	if line.startswith("ITEM: NUMBER"): nHeadIdxs.append(linecounter)
 	if line.startswith("ITEM: BOX BOUNDS"): boxHeadIdxs.append(linecounter)
@@ -94,14 +99,15 @@ for idx in atomHeadIdxs:
 
 # ------- calculate -----------
 # define liquid atom types here, should be a flag (see sim output)
-dropTypes = [1, 2] 
+dropTypes = [int(t) for t in purge(dropstring.split(' '))]
 # timeseries of relevant quantites
 r0s = []
 r1s = []
 thetas = [] 
+dropradii = [] # nominal drop radius
 
 print("Reading ensemble trajectory to estimate wetting angle...")
-for idx in tsHeadIdxs:
+for idx in tqdm(tsHeadIdxs):
 	atoms = [] # list of atom objects at this timestep
 	timestep = int(lines[idx+1])
 	nAtoms = int(lines[idx+3])
@@ -129,8 +135,14 @@ for idx in tsHeadIdxs:
 	print(f'minZ: {minZ}')
 
 
+	# angle calculation
 	slice0_coords = []
 	slice1_coords = []
+
+	# nominal radius
+	x_coords = []
+	y_coords = []
+
 	for line in atomlines:
 		tokens = purge(line.split(' ')) # id type x y z 
 		aType, x, y, z = int(tokens[1]), float(tokens[2]), float(tokens[3]), float(tokens[4])
@@ -139,40 +151,32 @@ for idx in tsHeadIdxs:
 				slice0_coords.append((x,y))
 			elif (z >= minZ + dz) and (z <= minZ + 2*dz):
 				slice1_coords.append((x,y))
+			x_coords.append(x)
+			y_coords.append(y)
+
+	# radius calculation
+	x_coords, y_coords = np.array(x_coords), np.array(y_coords)
+	xmin, xmax = np.min(x_coords), np.max(x_coords)
+	ymin, ymax = np.min(y_coords), np.max(y_coords)
+	R = np.sqrt((xmax-xmin)**2 + (ymax-ymin)**2) # really diameter
+	R /= 2
+	dropradii.append(R)
+	print(f'Drop radius: {R}')
+
 	print(f'Atoms in first slice: {len(slice0_coords)}')
 	print(f'Atoms in second slice: {len(slice1_coords)}')
-		
-	start = time.time()
 	r0, r1, theta = wettingAngle(slice0_coords, slice1_coords)
 	r0s.append(r0)
-	r1s.append(r1)
+	r1s.append(r1) # for debugging
 	thetas.append(theta)
-	#timesteps.append(timestep)
-	print(f'{round(time.time()-start, 4)} seconds')
 
-
-
-timesteps = 100*np.arange(0,len(thetas),1) # thermo_interval
-
+timesteps = np.arange(0,len(thetas),1) # thermo_interval
 theta_bar = np.mean(thetas)
-print(f'Time-averaged wetting angle: {theta_bar}')
 
-plt.rcParams['figure.figsize'] = (8,12)
-plt.rcParams['font.size'] = 14
-fig, axes = plt.subplots(3,1,sharex=True)
-axes[0].plot(timesteps,r0s)
-axes[1].plot(timesteps,r1s)
-axes[2].plot(timesteps,thetas,label=f'θ={round(theta_bar,2)}')
-axes[2].axhline(theta_bar,color='k')
-axes[0].set_ylabel('slice0 radius (angstroms)')
-axes[1].set_ylabel('slice1 radius (angstroms)')
-axes[2].set_ylabel('wetting angle (degrees)')
-axes[2].legend(loc='upper right')
-for i in [0,1,2]:
-	axes[i].set_xlabel('Timestep')
-	axes[i].grid()
-plt.ylabel('Wetting angle')
-plt.savefig('wetting-angle.png')
+print(f'Time-averaged wetting angle: {theta_bar}')
+out = np.vstack((timesteps,dropradii,thetas)) # r0s as nominal radii of each droplet
+with open(args.output,'wb') as f: np.save(f,out)
+
 
 	
 
