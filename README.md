@@ -6,8 +6,9 @@ Scripts currently available:
 - velocityProfile.py (calculates velocity profiles along some dimension binned along another dimension, needs a dump file with unwrapped coordinates)
 - wettingCircles.py (calculates wetting angle from a dump file)
 - pairCorrelation.py (calculates radial pair distribution functions for given pairs of atom types, needs a dump file)
+- velocityAutocorrelation.py (calculates velocity autocorrelations for specific atom types, needs a dump file with granular output)
+
 
 Shortly available:
-- velocityAutocorrelation.py (calculates velocity autocorrelations, needs a dump file with granular output)
 - template scripts for different sorts of alchemical simulations
  
