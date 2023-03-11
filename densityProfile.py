@@ -11,9 +11,11 @@ parser.add_argument('-i', action="store", dest="input")
 parser.add_argument('-o', action="store", dest="output")
 parser.add_argument('-dz', action="store", dest="dz") # bin width 
 parser.add_argument('-t', action="store", dest="atom_types") # atom types to calculate density profiles for, string like '1 3 4'
+parser.add_argument('-f', action="store", dest="frac") # fraction of simulation to use (the system should be equilibrated along z for this entire duration)
 args = parser.parse_args()
 
 dz = float(args.dz)
+frac = float(args.frac)
 atom_types = [int(t) for t in args.atom_types.split(' ')]
 print(f'Atom types to bin: {atom_types}')
 
@@ -39,11 +41,11 @@ for line in lines:
 boxBoundLines = []
 atomLines = []
 nAtoms = int(lines[nHeadIdxs[0]+1]) # assume constant N
-nUse = int(0.5*len(tsHeadIdxs)) # choose length of trajectory to analyze, might want to make this a flag
-tsHeadIdxs = tsHeadIdxs[nUse:]
-nHeadIdxs = nHeadIdxs[nUse:]
-boxHeadIdxs = boxHeadIdxs[nUse:]
-atomHeadIdxs = atomHeadIdxs[nUse:]
+nUse = int(frac*len(tsHeadIdxs)) # choose length of trajectory to analyze, might want to make this a flag
+tsHeadIdxs = tsHeadIdxs[-nUse:]
+nHeadIdxs = nHeadIdxs[-nUse:]
+boxHeadIdxs = boxHeadIdxs[-nUse:]
+atomHeadIdxs = atomHeadIdxs[-nUse:]
 print(f"Timesteps to average over: {len(tsHeadIdxs)}")
 for idx in boxHeadIdxs:
 	boxBoundLines.append(lines[idx+1:idx+4])

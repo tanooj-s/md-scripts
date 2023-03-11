@@ -11,9 +11,11 @@ parser.add_argument("-i", action="store", dest="input")
 parser.add_argument("-p", action="store", dest="pairstring") # string of atom type pairs to calculate RDFs for e.g. '1 1 2 2 1 3 2 3'
 parser.add_argument("-dr", action="store", dest="dr")
 parser.add_argument("-o", action="store", dest="output")
+parser.add_argument('-f', action="store", dest="nframes") # number of frames to use (add an option for intervals later, where RDFs are not averaged)
 args = parser.parse_args()
 
 dr = float(args.dr)
+nframes = int(args.nframes) # number of frames to use 
 pairstring = args.pairstring
 
 pairtokens = pairstring.split(' ')
@@ -90,11 +92,11 @@ for line in lines:
 boxBoundLines = []
 atomLines = []
 nAtoms = int(lines[nHeadIdxs[0]+1]) # no grand canonical shenanigans
-nUse = int(0.8*len(tsHeadIdxs)) # choose length of trajectory to analyze, might want to make this a flag
-tsHeadIdxs = tsHeadIdxs[nUse:]
-nHeadIdxs = nHeadIdxs[nUse:]
-boxHeadIdxs = boxHeadIdxs[nUse:]
-atomHeadIdxs = atomHeadIdxs[nUse:]
+#nUse = int(0.8*len(tsHeadIdxs)) # choose length of trajectory to analyze, might want to make this a flag
+tsHeadIdxs = tsHeadIdxs[-nframes:]
+nHeadIdxs = nHeadIdxs[-nframes:]
+boxHeadIdxs = boxHeadIdxs[-nframes:]
+atomHeadIdxs = atomHeadIdxs[-nframes:]
 print(f"Timesteps to average g(r) over: {len(tsHeadIdxs)}")
 
 for idx in boxHeadIdxs:
