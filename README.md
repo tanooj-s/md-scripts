@@ -7,7 +7,7 @@ Scripts currently available:
 - wettingCircles.py (calculates wetting angle from a dump file)
 - pairCorrelation.py (calculates radial pair distribution functions for given pairs of atom types, needs a dump file)
 - velocityAutocorrelation.py (calculates velocity autocorrelations for specific atom types, needs a dump file with granular output)
-
+- neighborsCutoff.py (calculates n nearest neighbors within a given cutoff as a basic order parameter)
 
 Shortly available:
 - template scripts for different sorts of alchemical simulations

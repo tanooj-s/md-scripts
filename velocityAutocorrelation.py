@@ -22,7 +22,8 @@ args = parser.parse_args()
 window = int(args.window)
 M = int(args.M)
 ts = float(args.ts)
-atom_types = [int(t) for t in args.atom_types.split(' ')]
+#atom_types = [int(t) for t in args.atom_types.split(' ')]
+atom_type = int(args.atom_types) # for now just assume a single atom type requested
 
 def purge(tokens): return [t for t in tokens if len(t) >= 1] # purge empty strings from token lists
 
@@ -31,7 +32,16 @@ def correlate(t0_vels, t1_vels):
 	assume inputs are (N, 3) shaped tuples of velocities of every atom of a given type 
 	need to ensure that atoms are ordered in the same way here before passing to this function
 	'''
-	assert t0_vels.shape == t1_vels.shape
+	
+	print(t0_vels.shape)
+	print(t1_vels.shape)
+	#assert t0_vels.shape == t1_vels.shape
+
+	# HACK - if one is shorter than the other for some reason then truncate the longer one to the same length
+	if t0_vels.shape[0] > t1_vels.shape[0]: t0_vels = t0_vels[:t1_vels.shape[0]]
+	elif t1_vels.shape[0] > t0_vels.shape[0]: t1_vels = t1_vels[:t0_vels.shape[0]]
+
+
 	t0_vels = np.reshape(t0_vels,(t0_vels.shape[0]*t0_vels.shape[1]))
 	t1_vels = np.reshape(t1_vels,(t1_vels.shape[0]*t1_vels.shape[1])) # reshape to 1D arrays to simplify dot product
 	corr = np.dot(t0_vels,t1_vels) / np.dot(t0_vels, t0_vels)
@@ -110,8 +120,8 @@ for i in range(M):
 		print(f'Correlating {t0} and {tj}')
 
 		# grab line indices of atom data corresponding to each relevant timetep
-		atomlines_t0 =  lines[tsIdxMap[t0]+9:tsIdxMap[t0]+9+nAtoms-1]
-		atomlines_tj =  lines[tsIdxMap[tj]+9:tsIdxMap[tj]+9+nAtoms-1] 
+		atomlines_t0 =  lines[tsIdxMap[t0]+8:tsIdxMap[t0]+8+nAtoms]
+		atomlines_tj =  lines[tsIdxMap[tj]+8:tsIdxMap[tj]+8+nAtoms] 
 
 		# make dictionaries of atom data at each timestep with {aID: [vx,vy,vz]}
 		# this makes it easier to later make sure data at each timestep is ordered the same way when calculating correlations 
@@ -120,12 +130,14 @@ for i in range(M):
 		t0_dict = {}
 		for line in atomlines_t0:
 			tokens = purge(line.split(' '))
-			t0_dict[int(tokens[idIdx])] = np.array([float(tokens[vxIdx]), float(tokens[vyIdx]), float(tokens[vzIdx])])
+			aType = int(tokens[typeIdx])
+			if aType == atom_type: t0_dict[int(tokens[idIdx])] = np.array([float(tokens[vxIdx]), float(tokens[vyIdx]), float(tokens[vzIdx])])
 
 		tj_dict = {}
 		for line in atomlines_tj:
 			tokens = purge(line.split(' '))
-			tj_dict[int(tokens[idIdx])] = np.array([float(tokens[vxIdx]), float(tokens[vyIdx]), float(tokens[vzIdx])])
+			aType = int(tokens[typeIdx])
+			if aType == atom_type: tj_dict[int(tokens[idIdx])] = np.array([float(tokens[vxIdx]), float(tokens[vyIdx]), float(tokens[vzIdx])])
 
 		# (LAMMPS does make sure atom data is already ordered correctly at every timestep here, but could be pedantic and add an assertion later)
 
@@ -156,159 +168,3 @@ with open(f'{args.output}','wb') as f: np.save(f,vacf)
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-	#print()
-	#for idx in headIdxs:
-	#	timestep = int(lines[idx+1])
-	#	print(timestep)
-
-
-exit()
-
-
-nUse = int(0.5*len(tsHeadIdxs)) # choose length of trajectory to analyze, might want to make this a flag
-tsHeadIdxs = tsHeadIdxs[startCollect:endCollect]
-nHeadIdxs = nHeadIdxs[startCollect:endCollect]
-boxHeadIdxs = boxHeadIdxs[startCollect:endCollect]
-atomHeadIdxs = atomHeadIdxs[startCollect:endCollect]
-
-
-
-
-
-vProfiles = np.zeros((1+len(atom_types), nBins)) # output array
-autocorrelations = np.zeros((1+len(atom_types), nBins)) # array of densities, needed for normalization
-# (unnormalized velocity profiles should mostly mirror density if uniform flow across z)
-# print out which atom type is which row in output array
-for i1, i2 in enumerate(atom_types):
-	print(f'Row {i1+1} | Atom type {i2}') # 0 will be zs
-# last row is net velocity profile
-print(f'Row {1+len(atom_types)} | Atom type NET')
-
-
-
-# ---- compute velocity profiles ----
-# create two line maps with current and previous atomic data at each timestep
-# index dictionaries by atom IDs
-# compute velocity for each atom as delY / delT
-
-delT = dt * 1e-15 # convert to seconds 
-nCollected = 0 # for normalization
-print("Computing velocities from unwrapped displacements...")
-for idx in tqdm(tsHeadIdxs): # line indices being iterated over
-	timestep = int(lines[idx+1])
-
-	if timestep % collect_window == 0:
-		nAtoms = int(lines[idx+3])
-		atomlines = lines[idx+9:idx+9+nAtoms] 
-
-		if timestep == timestep0:
-			lineMapCurr = {}
-			for line in atomlines: # atomlines is just for this timestep
-				tokens = purge(line.split(' '))
-				atomID = int(tokens[idIdx])
-				lineMapCurr[atomID] = line
-
-		elif timestep > timestep0:
-			nCollected += 1
-			lineMapPrev = lineMapCurr
-			lineMapCurr = {} # reset
-
-			for line in atomlines: 
-				tokens = purge(line.strip('\n').split(' '))
-				atomID = int(tokens[idIdx])
-				lineMapCurr[atomID] = line
-
-			# after linemap has been built out, iterate through keys of dict to collect relevant data for each atom
-			# i.e. iterate over atom IDs in current and previous timesteps
-			for atomID in lineMapCurr.keys():
-				tokensCurr = purge(lineMapCurr[atomID].split(' '))
-				tokensPrev = purge(lineMapPrev[atomID].split(' '))
-				aType = int(tokensCurr[typeIdx])
-				if aType in atom_types:
-					# confirm same atom ID across timesteps
-					aIDCurr, aIDPrev = int(tokensCurr[idIdx]), int(tokensPrev[idIdx])
-					assert aIDCurr == aIDPrev
-
-					currZ, prevZ = float(tokensCurr[zuIdx]), float(tokensPrev[zuIdx])
-					currYu, prevYu = float(tokensCurr[yuIdx]), float(tokensPrev[yuIdx])
-					# assuming flow is along y
-
-					# assign histogram bin based on mean of z displacement across timesteps
-					z = 0.5*(currZ+prevZ)
-					binIdx = int((z-minZ)/dz)
-
-					delY = currYu - prevYu # in angstroms
-					delY *= 1e-10 # angstroms -> meters 
-					v = delY / delT # should be in m/s now
-
-					# assign to profile of specific atom type
-					idx1 = atom_types.index(aType) # index along first axis of output array (i.e. atom type)
-					binIdx = int((z - minZ)/dz)
-					vProfiles[idx1,binIdx] += v
-					densities[idx1,binIdx] += 1
-
-					# assign to net profile regardless of atom type
-					vProfiles[-1,binIdx] += v
-					densities[-1,binIdx] += 1
-
-print(f"Number of delta displacement collections: {nCollected}")
-
-# ---------------------------------------------------------------------
-
-
-# normalize
-densities /= nCollected
-vProfiles /= nCollected
-assert densities.shape == vProfiles.shape
-vProfiles = np.divide(vProfiles, densities, out=np.zeros_like(densities), where=densities!=0)
-
-# append z values (i.e. x axis of histograms) as first row
-zs = np.arange(minZ,maxZ,dz)
-assert len(zs) == densities.shape[1]
-assert len(zs) == vProfiles.shape[1]
-zs = np.reshape(zs, (1, densities.shape[1]))
-densities = np.concatenate((zs,densities))
-vProfiles = np.concatenate((zs,vProfiles))
-
-with open(f'rho-{args.output}','wb') as f: np.save(f,densities)
-with open(f'v-{args.output}','wb') as f: np.save(f,vProfiles)
