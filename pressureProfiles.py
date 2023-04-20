@@ -97,7 +97,7 @@ pyy_z = np.zeros(nbins)
 pzz_z = np.zeros(nbins) # compute for entire system
 
 # append z values (i.e. x axis of histograms) as first row
-zs = np.arange(minz,maxz,dz)
+zs = dz*np.arange(0,pxx_z.shape[0],1)
 assert zs.shape == pxx_z.shape
 assert zs.shape == pyy_z.shape
 assert zs.shape == pzz_z.shape
@@ -117,10 +117,12 @@ for idx in tqdm(tsHeadIdxs):
 		# first do per atom volume normalization to get units of atm
 		for p_i in [pxx, pyy, pzz]: p_i /= (VA3*nbins) # confirm factor of 3 not needed for individual components
 		for p_i in [pxx, pyy, pzz]: p_i *= 101325 # convert atm to Pa (edit as necessary)
-		binIdx = int((z - minz)/dz)
-		pxx_z[binIdx] += pxx
-		pyy_z[binIdx] += pyy
-		pzz_z[binIdx] += pzz
+		
+		if ((z < maxz) and (z > minz)): # explicit check in case of weirdness
+			binIdx = int((z - minz)/dz)
+			pxx_z[binIdx] += pxx
+			pyy_z[binIdx] += pyy
+			pzz_z[binIdx] += pzz
 
 pxx_z /= len(tsHeadIdxs) # normalize
 pyy_z /= len(tsHeadIdxs)
