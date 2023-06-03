@@ -1,6 +1,8 @@
 # read in a dump file, calculate RDFs for specified pairs of atom types
 # output a numpy array of shape (1+nTypes, nbins)
 
+# TODO: modify code to only do a single pass through input file
+
 import argparse
 import numpy as np
 import time
@@ -8,18 +10,28 @@ from tqdm import tqdm
 
 parser = argparse.ArgumentParser(description="parse lammps dump file")
 parser.add_argument("-i", action="store", dest="input")
+parser.add_argument("-o", action="store", dest="output")
 parser.add_argument("-p", action="store", dest="pairstring") # string of atom type pairs to calculate RDFs for e.g. '1 1 2 2 1 3 2 3'
 parser.add_argument("-dr", action="store", dest="dr")
-parser.add_argument("-o", action="store", dest="output")
-parser.add_argument('-f', action="store", dest="nframes") # number of frames to use (add an option for intervals later, where RDFs are not averaged)
+parser.add_argument("-start", action="store", dest="start") # data collection start frame
+parser.add_argument("-end", action="store", dest="end") # data collection end frame
+parser.add_argument("-nevery", action="store", dest="nevery") # collect data every this many timesteps (to prevent calculating at highly correlated timesteps)
+parser.add_argument("-dumpint", action="store", dest="dumpint") # dump interval in terms of timesteps
 args = parser.parse_args()
 
 dr = float(args.dr)
-nframes = int(args.nframes) # number of frames to use 
+start = int(args.start)
+end = int(args.end)
+nevery = int(args.nevery)
+dumpint = int(args.dumpint)
 pairstring = args.pairstring
+
+assert start < end
+assert nevery <= end-start
 
 pairtokens = pairstring.split(' ')
 assert len(pairtokens) % 2 == 0
+
 # split pairtypes so you have an array of pairs like ['1 1','2 2','1 3','2 3']
 pairs = []
 while len(pairtokens) > 0:
@@ -93,10 +105,13 @@ boxBoundLines = []
 atomLines = []
 nAtoms = int(lines[nHeadIdxs[0]+1]) # no grand canonical shenanigans
 #nUse = int(0.8*len(tsHeadIdxs)) # choose length of trajectory to analyze, might want to make this a flag
-tsHeadIdxs = tsHeadIdxs[-nframes:]
-nHeadIdxs = nHeadIdxs[-nframes:]
-boxHeadIdxs = boxHeadIdxs[-nframes:]
-atomHeadIdxs = atomHeadIdxs[-nframes:]
+tsHeadIdxs = tsHeadIdxs[int(start/dumpint):int(end/dumpint):int(nevery/dumpint)]
+nHeadIdxs = nHeadIdxs[int(start/dumpint):int(end/dumpint):int(nevery/dumpint)]
+boxHeadIdxs = boxHeadIdxs[int(start/dumpint):int(end/dumpint):int(nevery/dumpint)] # needs to be divided by dump interval
+atomHeadIdxs = atomHeadIdxs[int(start/dumpint):int(end/dumpint):int(nevery/dumpint)]
+print(f"Data collection start frame: {start}")
+print(f"Data collection end frame: {end}")
+print(f"Data collection interval: {nevery}")
 print(f"Timesteps to average g(r) over: {len(tsHeadIdxs)}")
 
 for idx in boxHeadIdxs:
