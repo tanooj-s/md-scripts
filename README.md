@@ -1,7 +1,7 @@
 This repo contains analysis and datafile generation scripts for LAMMPS molecular dynamics simulations.
 
 Scripts currently available:
-- topologyBuilder.py (builds bond topology for use with something like a CHARMM force field)
+- topologyBuilder.py (builds bond topology for molecular mechanics e.g. CHARMM)
 - densityProfile.py (calculates density profiles along a specific dimension from a dump file)
 - densityProfileIO.py (same as above, but does analysis as dump file is being read, necessary for large systems)
 - pressureProfiles.py (calculate z-resolved pressure tensor elements, needs a dump file with compute stress/atom output)
