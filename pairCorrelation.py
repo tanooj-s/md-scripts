@@ -150,19 +150,19 @@ print(f"Generating g(r) up to r={rLim}")
 nbins = int(rLim/dr) + 1
 print(f"Number of bins: {nbins}")
 rs = dr*np.arange(0.001,nbins,1) # x axis of histograms
-rdfs = np.zeros((len(pairs), nbins)) # output array
+rdfs = np.zeros((len(pairs)+1, nbins)) # output array, last row as species blind RDF
 # print out which pairs are which row in output array
 for idx, pair in enumerate(pairs):
 	print(f'Row {idx+1} | Types {pair[0]} {pair[1]}') # 0 will be rs
+print(f'Row {len(pairs)+1} | Species-blind')
 
 
 # ---- create typeMap to only grab positions of relevant atom types at each timestep ----
 relevantTypes = list(set(pairstring.split(' ')))
 relevantTypes = [int(t) for t in relevantTypes]
-print(relevantTypes)
 typeMap = {}
 for idx, t in enumerate(relevantTypes):
-	typeMap[t] = idx
+	typeMap[t] = idx 
 
 
 # ---- loop through frames of interest, calculate g(r) ---
@@ -182,7 +182,7 @@ for idx in tqdm(tsHeadIdxs):
 	# at each timestep, create an array of atom objects for each relevant type 
 	# then iterate over pairs, grab pair0 and pair1 from the array of positions
 	# need to map indices of the atoms array to each relevant atom type 
-	atoms = []
+	atoms = [] # list of lists, with each sublist as atom objects only of a certain type
 	for t in relevantTypes:
 		atoms.append([])
 
@@ -198,7 +198,16 @@ for idx in tqdm(tsHeadIdxs):
 		idx = pairs.index(pair)
 		start = time.time()
 		rdfs[idx] = pairCorrelation(type1_atoms, type2_atoms, L, rs)
-		print(f'{round(time.time()-start,4)}s for g{pair[0]}{pair[1]}(r)')
+		print(f'{round(time.time()-start,4)}s for g{pair[0]}{pair[1]}(r) with {len(type1_atoms)} atoms of type {pair[0]} and {len(type2_atoms)} atoms of type {pair[1]}')
+
+	# species blind RDF
+	all_atoms = []
+	for sublist in atoms: all_atoms.extend(sublist)
+	start = time.time()
+	rdfs[-1] = pairCorrelation(all_atoms, all_atoms, L, rs)
+	print(f'{round(time.time()-start,4)}s for species-blind g(r) with {len(all_atoms)} atoms')
+	# this can also be calculated faster as the weighted average of all pairs, but user might not request a calculation of g(r) for all pairs in the system
+
 
 # append rs
 assert len(rs) == rdfs.shape[1]
