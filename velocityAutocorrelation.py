@@ -137,8 +137,6 @@ for i in range(M):
 
 		atomlines_t0 = lines[lineIdxs[idx0]+8 : lineIdxs[idx0]+8+nAtoms]
 		atomlines_tj = lines[lineIdxs[idxj]+8 : lineIdxs[idxj]+8+nAtoms] 
-		# NEED A MAP GOING FROM FRAME i = 0, 1, 2, etc to line number in dump file
-		# FRAME i = 0, 1, 2 etc is idx0 and idxi and idxj
 
 
 		t0_dict, tj_dict = {}, {}
