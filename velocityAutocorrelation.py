@@ -21,7 +21,6 @@ window = float(args.window)
 M = int(args.M)
 ts = float(args.ts)
 atom_types = [int(t) for t in args.atom_types.split(' ')]
-#atom_type = int(args.atom_types) # for now just assume a single atom type requested
 
 def purge(tokens): return [t for t in tokens if len(t) >= 1] # purge empty strings from token lists
 
@@ -79,7 +78,6 @@ print(f'Dump format: {atomHeader}')
 print(f'Atom types to calculate time correlations for: {atom_types}')
 print(f'Windows to average over: {M}')
 print(f'Length of a given window: {window} picoseconds')
-print(f'Length of a given window in femtoseconds: {window * 1000} femtoseconds')
 print(f'Length of a given window in simulation timesteps: {window * 1000 / ts}')
 
 timestep0, timestep1 = int(lines[lineIdxs[0]]), int(lines[lineIdxs[1]])
@@ -93,66 +91,49 @@ print(f'Last timestep: {last_step}')
 print(f'LAMMPS dump interval: {dump_interval} timesteps')
 print(f'LAMMPS dump interval (sim time): {dt_dump} fs')
 print(f'Frames to correlate for a single window: {collect_window} ') # number of frames to compute correlations over 
-
 print(f'Total number of frames available to access data from: {len(lineIdxs)}')
-
-# ---- map each timestep to its line index ----
-
-#print(lineIdxs)
-#for i in lineIdxs:
-#	print(f" | line index : {i} | timestep : {lines[i]}")
-
-
-vacf = [] # list of autocorrelation functions calculated for each window, what's going to be output
-
-#print('LineMap to timesteps')
-
-#print(lineIdxs)
-
-
 print(f'{M} windows with {collect_window} frames to correlate over')
 
-# ---- loop over intervals ----
+vacf = [] # output data, cvv(t) for each requested atom type
+
+# ---- collect data for each window to average over ----
 for i in range(M):	
 	idx0 = len(lineIdxs) - (M-i)*collect_window
 	idxi = len(lineIdxs) - (M-i-1)*collect_window # this has to be in units of frames, not physical time
-
-	# mapping from t0 --> idx0 as the frame 
-	#idx0 = int((t0 - timestep0) / dump_interval)
-	#idxi = int((ti - timestep0) / dump_interval)
 	print(f'Window {i+1}: frame number {idx0} to frame number {idxi}')
 
-	#print(f'Window {i+1}: frame {idx0} to frame {idxi}')
-
-	cvv = [] # autocorrelation functions for each atom type, for this specific interval
+	cvv = [] # autocorrelation functions for each atom type, for this specific window
 	for aType in atom_types: cvv.append([])
-	#for idxj in idx0+np.arange(0,idxi-idx0+1,1): # compute correlations with t0 at every timestep within this interval
+	
+	# ---- iterate over pairs of timesteps within each window ----
 	for idxj in np.arange(idx0,idxi,1):
-	#for idxj in range(idxi-idx0):
 		print(f'Correlating frame {idx0} and {idxj}')
-		# grab line indices of atom data corresponding to each relevant timetep
-		#print(f"---> idxj={idxj}")
-		#print(f"---> lineIdxs[idxj]={lineIdxs[idxj]}")
-
 
 		atomlines_t0 = lines[lineIdxs[idx0]+8 : lineIdxs[idx0]+8+nAtoms]
 		atomlines_tj = lines[lineIdxs[idxj]+8 : lineIdxs[idxj]+8+nAtoms] 
-
-
+		
 		t0_dict, tj_dict = {}, {}
+		# data for atoms to "remember" for each pair of timesteps
 
+		# TODO: add z for striated data collection along interface normal
 		for line in atomlines_t0:
 			tokens = purge(line.split(' '))
 			aType = int(tokens[typeIdx])
-			if aType in atom_types: t0_dict[int(tokens[idIdx])] = np.array([aType, float(tokens[vxIdx]), float(tokens[vyIdx]), float(tokens[vzIdx])])
+			if aType in atom_types: t0_dict[int(tokens[idIdx])] = np.array([aType, 
+																			float(tokens[vxIdx]), 
+																			float(tokens[vyIdx]), 
+																			float(tokens[vzIdx])])
 		for line in atomlines_tj:
 			tokens = purge(line.split(' '))
 			aType = int(tokens[typeIdx])
-			if aType in atom_types: tj_dict[int(tokens[idIdx])] = np.array([aType, float(tokens[vxIdx]), float(tokens[vyIdx]), float(tokens[vzIdx])])
-		# (LAMMPS does make sure atom data is already ordered correctly at every timestep here, but could be pedantic and add an assertion later)
+			if aType in atom_types: tj_dict[int(tokens[idIdx])] = np.array([aType, 
+																			float(tokens[vxIdx]), 
+																			float(tokens[vyIdx]), 
+																			float(tokens[vzIdx])])
+		# TODO: binning by z
 		t0_vels = np.array(list(t0_dict.values()))
 		tj_vels = np.array(list(tj_dict.values()))   
-		# now calculate correlations by type 
+		# now compute correlations by type 
 		for i in range(len(atom_types)):
 			aType = atom_types[i]
 			cvv[i].append(correlate(t0_vels[np.where(t0_vels[:,0] == aType)],tj_vels[np.where(tj_vels[:,0] == aType)]))
@@ -160,11 +141,12 @@ for i in range(M):
 	vacf.append(cvv)
 vacf = np.array(vacf) 
 
-# average over M collections
+# average over M windows
 print("Averaging over windows...")
 vacf = np.sum(vacf,axis=0) / M
 
 # append net VACF averaged over all types at end
+# TODO: make this logic more sophisticated (only average over certain types for net e.g. when using coreshell models)
 print("Averaging over atom types for net VACF...")
 net = np.sum(vacf,axis=0) / vacf.shape[0]
 net = np.reshape(net, (1, vacf.shape[1]))
