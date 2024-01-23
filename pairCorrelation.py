@@ -2,6 +2,9 @@
 # output a numpy array of shape (1+nTypes, nbins)
 
 # TODO: modify code to only do a single pass through input file
+# building neighbor lists does not speed this computation up at all
+# since building an appropriate neighbor list at every timestep requires iterating over all pairs anyway
+# this needs to use the linked-cell method instead 
 
 import argparse
 import numpy as np
@@ -27,7 +30,7 @@ dumpint = int(args.dumpint)
 pairstring = args.pairstring
 
 assert start < end
-assert nevery <= end-start
+#assert nevery <= end-start
 
 pairtokens = pairstring.split(' ')
 assert len(pairtokens) % 2 == 0
