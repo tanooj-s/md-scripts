@@ -45,6 +45,12 @@ def purge(tokens): return [t for t in tokens if len(t) >= 1]
 
 
 # ---- relevant functions go here ----
+# !! logic below is bad and I am feeling bad
+# this gets the mean radius and not the actual radius
+# need to do some kind of smarter fitting
+# scan across angles and find coordinates of furthest atom from the center
+# then only use these "furthest" atoms to find the mean radius in each slice
+# (really would be some kind of scan over a 2d solid angle)
 def wettingAngle(slice0_coords, slice1_coords):
 	# assume each is a list of 2-tuples
 	# cast to numpy array of shape (nAtoms, 2)
