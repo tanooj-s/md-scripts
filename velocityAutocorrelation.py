@@ -24,7 +24,7 @@ atom_types = [int(t) for t in args.atom_types.split(' ')]
 
 def purge(tokens): return [t for t in tokens if len(t) >= 1] # purge empty strings from token lists
 
-def correlate(t0_vels, t1_vels):
+def correlate_normalized(t0_vels, t1_vels):
 	'''
 	assume inputs are (N, 4) shaped tuples of velocities of every atom of a given type 
 	(type, vx, vy, vz)
@@ -35,6 +35,21 @@ def correlate(t0_vels, t1_vels):
 	t0_vels = np.reshape(t0_vels,(t0_vels.shape[0]*t0_vels.shape[1]))
 	t1_vels = np.reshape(t1_vels,(t1_vels.shape[0]*t1_vels.shape[1])) # reshape to 1D arrays to simplify dot product
 	corr = np.dot(t0_vels,t1_vels) / np.dot(t0_vels, t0_vels)
+	return corr
+
+def correlate_unnormalized(t0_vels, t1_vels):
+	'''
+	!!!!USE THIS FUNCTION FOR CALCULATING DIFFUSION COEFFICIENTS!!!!
+	assume inputs are (N, 4) shaped tuples of velocities of every atom of a given type 
+	(type, vx, vy, vz)
+	need to ensure that atoms are ordered in the same way here before passing to this function
+
+	'''
+	t0_vels, t1_vels = t0_vels[:,1:], t1_vels[:,1:] # remove atom types
+	assert t0_vels.shape[1] == t1_vels.shape[1] == 3
+	t0_vels = np.reshape(t0_vels,(t0_vels.shape[0]*t0_vels.shape[1]))
+	t1_vels = np.reshape(t1_vels,(t1_vels.shape[0]*t1_vels.shape[1])) # reshape to 1D arrays to simplify dot product
+	corr = np.dot(t0_vels,t1_vels)
 	return corr
 
 
@@ -136,7 +151,8 @@ for i in range(M):
 		# now compute correlations by type 
 		for i in range(len(atom_types)):
 			aType = atom_types[i]
-			cvv[i].append(correlate(t0_vels[np.where(t0_vels[:,0] == aType)],tj_vels[np.where(tj_vels[:,0] == aType)]))
+			#cvv[i].append(correlate_normalized(t0_vels[np.where(t0_vels[:,0] == aType)],tj_vels[np.where(tj_vels[:,0] == aType)]))
+			cvv[i].append(correlate_unnormalized(t0_vels[np.where(t0_vels[:,0] == aType)],tj_vels[np.where(tj_vels[:,0] == aType)]))
 	cvv = np.array(cvv)
 	vacf.append(cvv)
 vacf = np.array(vacf) 
