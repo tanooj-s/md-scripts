@@ -15,17 +15,22 @@ parser.add_argument('-w', action="store", dest="window") # window over which to 
 parser.add_argument('-M', action="store", dest="M") # how many windows to average over
 parser.add_argument('-ts', action="store", dest="ts") # LAMMPS timestep in femtoseconds - this can't be inferred, must be specified by user (should be in LAMMPS input file)
 parser.add_argument('-t', action="store", dest="atom_types") # string of atom types to collect data for
+parser.add_argument('-norm', action="store", dest="norm") # calcualate normalized or unnormalized vacf, either 'y' or 'n'
 args = parser.parse_args()
 
 window = float(args.window)
 M = int(args.M)
 ts = float(args.ts)
 atom_types = [int(t) for t in args.atom_types.split(' ')]
+norm = args.norm
+
+assert norm in ['y','n']
 
 def purge(tokens): return [t for t in tokens if len(t) >= 1] # purge empty strings from token lists
 
 def correlate_normalized(t0_vels, t1_vels):
 	'''
+	cvv = v(0).v(t) / v(0).v(0)
 	assume inputs are (N, 4) shaped tuples of velocities of every atom of a given type 
 	(type, vx, vy, vz)
 	need to ensure that atoms are ordered in the same way here before passing to this function
@@ -39,7 +44,8 @@ def correlate_normalized(t0_vels, t1_vels):
 
 def correlate_unnormalized(t0_vels, t1_vels):
 	'''
-	!!!!USE THIS FUNCTION FOR CALCULATING DIFFUSION COEFFICIENTS!!!!
+	cvv = v(0).v(t) 
+	(use this version for calculting diffusion coefficients)
 	assume inputs are (N, 4) shaped tuples of velocities of every atom of a given type 
 	(type, vx, vy, vz)
 	need to ensure that atoms are ordered in the same way here before passing to this function
@@ -47,9 +53,10 @@ def correlate_unnormalized(t0_vels, t1_vels):
 	'''
 	t0_vels, t1_vels = t0_vels[:,1:], t1_vels[:,1:] # remove atom types
 	assert t0_vels.shape[1] == t1_vels.shape[1] == 3
+	N = t0_vels.shape[0] # need to normalize by number of particles in this case
 	t0_vels = np.reshape(t0_vels,(t0_vels.shape[0]*t0_vels.shape[1]))
 	t1_vels = np.reshape(t1_vels,(t1_vels.shape[0]*t1_vels.shape[1])) # reshape to 1D arrays to simplify dot product
-	corr = np.dot(t0_vels,t1_vels)
+	corr = np.dot(t0_vels,t1_vels) / N
 	return corr
 
 
@@ -72,7 +79,7 @@ for line in tqdm(lines):
 
 boxBoundLines = []
 atomLines = []
-nAtoms = int(lines[nHeadIdxs[0]+1]) # assume constant N
+nAtoms = int(lines[nHeadIdxs[0]+1]) # assume constant N, need this for unnormalized VACF computation
 lineIdxs = [i+1 for i in tsHeadIdxs] # array with line index corresponding to each timestep
 
 for idx in boxHeadIdxs: # don't need box data here
@@ -121,8 +128,8 @@ for i in range(M):
 	for aType in atom_types: cvv.append([])
 	
 	# ---- iterate over pairs of timesteps within each window ----
-	for idxj in np.arange(idx0,idxi,1):
-		print(f'Correlating frame {idx0} and {idxj}')
+	for idxj in tqdm(np.arange(idx0,idxi,1)):
+		#print(f'Correlating frame {idx0} and {idxj}')
 
 		atomlines_t0 = lines[lineIdxs[idx0]+8 : lineIdxs[idx0]+8+nAtoms]
 		atomlines_tj = lines[lineIdxs[idxj]+8 : lineIdxs[idxj]+8+nAtoms] 
@@ -151,8 +158,10 @@ for i in range(M):
 		# now compute correlations by type 
 		for i in range(len(atom_types)):
 			aType = atom_types[i]
-			#cvv[i].append(correlate_normalized(t0_vels[np.where(t0_vels[:,0] == aType)],tj_vels[np.where(tj_vels[:,0] == aType)]))
-			cvv[i].append(correlate_unnormalized(t0_vels[np.where(t0_vels[:,0] == aType)],tj_vels[np.where(tj_vels[:,0] == aType)]))
+			if norm == 'y':
+				cvv[i].append(correlate_normalized(t0_vels[np.where(t0_vels[:,0] == aType)],tj_vels[np.where(tj_vels[:,0] == aType)]))
+			elif norm == 'n':
+				cvv[i].append(correlate_unnormalized(t0_vels[np.where(t0_vels[:,0] == aType)],tj_vels[np.where(tj_vels[:,0] == aType)]))
 	cvv = np.array(cvv)
 	vacf.append(cvv)
 vacf = np.array(vacf) 
