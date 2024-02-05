@@ -172,6 +172,7 @@ vacf = np.sum(vacf,axis=0) / M
 
 # append net VACF averaged over all types at end
 # TODO: make this logic more sophisticated (only average over certain types for net e.g. when using coreshell models)
+# ALSO: this needs to be properly weighted by the number of particles of each type for net
 print("Averaging over atom types for net VACF...")
 net = np.sum(vacf,axis=0) / vacf.shape[0]
 net = np.reshape(net, (1, vacf.shape[1]))
