@@ -119,10 +119,10 @@ print(f'{M} windows with {collect_window} frames to correlate over')
 vacf = [] # output data, cvv(t) for each requested atom type
 
 # ---- collect data for each window to average over ----
-for i in range(M):	
-	idx0 = len(lineIdxs) - (M-i)*collect_window
-	idxi = len(lineIdxs) - (M-i-1)*collect_window # this has to be in units of frames, not physical time
-	print(f'Window {i+1}: frame number {idx0} to frame number {idxi}')
+for t in range(M):	
+	idx0 = len(lineIdxs) - (M-t)*collect_window
+	idxi = len(lineIdxs) - (M-t-1)*collect_window # this has to be in units of frames, not physical time
+	print(f'Window {t+1}: frame number {idx0} to frame number {idxi}')
 
 	cvv = [] # autocorrelation functions for each atom type, for this specific window
 	for aType in atom_types: cvv.append([])
