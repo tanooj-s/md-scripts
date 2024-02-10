@@ -148,8 +148,8 @@ for t in np.arange(0,frames,1):
 		tangent_l = np.divide(z,xl,out=np.zeros_like(z), where=xl!=0)
 		tangent_r = np.divide(z,xr,out=np.zeros_like(z), where=xr!=0)
 		# compute angle at this timestep as a function of z for both sides
-		theta_l += 180 - (180/np.pi) * np.arctan(z/xl)
-		theta_r += 180 - (180/np.pi) * np.arctan(z/xr) # wetting angle is the other side of tangent for this triangle
+		theta_l += 180 - (180/np.pi) * np.arctan(tangent_l)
+		theta_r += 180 - (180/np.pi) * np.arctan(tangent_r) # wetting angle is the other side of tangent for this triangle
 		frames_collected += 1
 
 print(f"Angle data computed from {frames_collected} out of {frames} frames")
