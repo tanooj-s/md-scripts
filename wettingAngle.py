@@ -207,8 +207,10 @@ xfit2 = xfit2[np.where(xfit2 >= 0)[0]]
 ztrain = ztrain[np.where(xfit2 >= 0)[0]] # only use nonegative values for plotting 
 xfit = np.sqrt(xfit2)
 
+plt.rcParams['figure.figsize'] = (8,8)
+plt.rcParams['font.size'] = 16
 plt.plot(x,z,label='simulation data')
-plt.scatter(x=xfit,y=ztrain,label=f'fitted circle with r={round(rfit,3)}, h={round(hfit,3)}',color='r',sizes=[5]*len(ztrain))
+plt.scatter(x=xfit,y=ztrain,label=f'fitted circle with r={round(rfit,3)}, h={round(hfit,3)}',color='r',sizes=[8]*len(ztrain))
 plt.title(f'Calculated wetting angle θ={round(theta,3)}')
 plotbound = 20+np.max(np.hstack((ztrain,xfit)))
 plt.xlim(-20,plotbound)
