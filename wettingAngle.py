@@ -69,7 +69,6 @@ print(f'{idIdx} {typeIdx} {xIdx} {yIdx} {zIdx}')
 # ---- parse data file for densities ----
 
 densities = [] # trajectory of densities
-density = np.zeros((nbinsx,nbinsz)) # time averaged density
 # this will have shape (timesteps,nbinsx,nbinsz)
 print("Parsing and analyzing dump directly to obtain 2D densities...")
 timestart = time.time()
