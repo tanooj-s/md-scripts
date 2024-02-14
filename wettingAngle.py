@@ -1,5 +1,5 @@
 # this is the correct way to calculate wetting angles in a 2d geometry
-# calculate densities, then fit a circle to arcs data from the edges of the density
+# calculate densities, then fit a circle to arc data from edges of density
 # equation of fit circle x**2 + (z-h)**2 = r**2 (centered on z axis)
 # (fit parameters here are r and h)
 # wetting angle is 90 + arccos(h/r)
