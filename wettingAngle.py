@@ -185,7 +185,7 @@ def circleResiduals(params,z,x):
     residual = x**2 - x2
     return residual
 
-initial_guess = [np.mean(ztrain),np.mean(ztrain)] # this should be pretty flexible
+initial_guess = [np.mean(ztrain),np.mean(xtrain)] # this should be pretty flexible
 res_lsq = least_squares(circleResiduals,initial_guess,loss='soft_l1',args=(ztrain,xtrain))
 rfit, hfit = res_lsq.x
 rfit, hfit = np.abs(rfit), np.abs(hfit) # make sure returned params are positive
