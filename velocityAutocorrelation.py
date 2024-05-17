@@ -49,7 +49,6 @@ def correlate_unnormalized(t0_vels, t1_vels):
 	assume inputs are (N, 4) shaped tuples of velocities of every atom of a given type 
 	(type, vx, vy, vz)
 	need to ensure that atoms are ordered in the same way here before passing to this function
-
 	'''
 	t0_vels, t1_vels = t0_vels[:,1:], t1_vels[:,1:] # remove atom types
 	assert t0_vels.shape[1] == t1_vels.shape[1] == 3
