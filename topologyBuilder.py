@@ -176,7 +176,9 @@ for a in atoms:
 atomsByType = {}
 for aType in range(1,1+n_types):
 	atomsByType[aType] = [a for a in atoms if a.atom_type == aType]
+print(atomsByType)
 
+exit()
 
 # ----- generate 2-bonds -----
 
