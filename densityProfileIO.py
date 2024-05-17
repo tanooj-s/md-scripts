@@ -9,6 +9,7 @@ import argparse
 import numpy as np
 from tqdm import tqdm
 import time
+import matplotlib.pyplot as plt
 
 parser = argparse.ArgumentParser(description="calculate density profiles")
 parser.add_argument('-i', action="store", dest="input")
@@ -17,7 +18,7 @@ parser.add_argument('-dz', action="store", dest="dz") # bin width
 parser.add_argument('-minz', action="store", dest="minz")
 parser.add_argument('-maxz', action="store", dest="maxz")
 parser.add_argument('-start', action="store", dest="start")
-parser.add_argument('-t', action="store", dest="atom_types") # atom types to calculate density profiles for, string like '1 3 4'
+parser.add_argument('-t', action="store", dest="atom_types") # atom types to calculate profiles for, string like '1 3 4'
 args = parser.parse_args()
 
 dz = float(args.dz)
@@ -40,10 +41,12 @@ def isfloat(s): # hack function to confirm tokens are numeric as floats
 print(f'MinZ: {minz}')
 print(f'MaxZ: {maxz}')
 nBins = int((maxz-minz)/dz) + 1
-densities = np.zeros((len(atom_types), nBins)) # output array
+densities = np.zeros((1+len(atom_types), nBins)) # output array
 # print out which atom type is which row in output array
 for i1, i2 in enumerate(atom_types):
 	print(f'Row {i1+1} | Atom type {i2}') # 0 will be zs
+
+# last is species blind
 
 # infer dump format from first 10 lines
 idIdx, typeIdx, xIdx, yIdx, zIdx = 0, 0, 0, 0, 0
@@ -81,6 +84,7 @@ with open(args.input,'r') as f:
 					idx1 = atom_types.index(aType) # index atom type along first axis of output array
 					binIdx = int((z - minz)/dz)
 					densities[idx1, binIdx] += 1
+					densities[-1, binIdx] += 1 # species blind
 		if (currentTime > start) and (previousLine.startswith('ITEM: ATOMS')):
 			doCollect = True
 			nCollected += 1
@@ -100,5 +104,53 @@ print(zs.shape)
 assert len(zs) == densities.shape[1]
 zs = np.reshape(zs, (1, densities.shape[1]))
 densities = np.concatenate((zs,densities))
-with open(args.output,'wb') as f: np.save(f, densities)
+with open(args.output+".rho_z.npy",'wb') as f: np.save(f, densities)
+
+
+
+# normalization, plot profile for each species and net
+# only consider profiles out to 4 nm
+# everything below is for a specific system and not general but make it general later
+rho = densities
+idx = int(40/dz) + 1
+z = dz * np.arange(0,len(rho[0][:idx]),1)
+
+pltwidth = 12
+pltheight = int(np.ceil((rho.shape[0]-1) * 3.))
+fig, axes = plt.subplots(rho.shape[0]-1,1,sharex=True)
+plt.rcParams['figure.figsize'] = (pltwidth,pltheight)
+ionMap = {1: 'F', 2: 'Li', 3: 'Na', 4: 'K', 5: 'Net'}
+for i in range(1+len(atom_types)):
+    rho_i = rho[i+1][:idx]
+    N_i = np.trapz(x=z,y=rho_i) # normalization factor up to this z (TODO move normalization up)
+    rho_i /= N_i
+    axes[i].plot(z,rho_i,label=f"{ionMap[i+1]}",lw=2)
+    # get the flat/uniform long range value to plot as a dotted line
+    limit_val = np.mean(rho_i[-30:])
+    axes[i].axhline(limit_val,color='k',linestyle='dashed')
+    axes[i].legend(loc="upper right")
+    axes[i].grid()
+    axes[i].set_ylim(0,2*limit_val)
+axes[-1].set_xlabel("z (Å)")
+axes[0].set_title("Ion density profiles ρ(z)")
+plt.tight_layout()
+plt.savefig(args.output+".rho_z.png")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
