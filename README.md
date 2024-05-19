@@ -5,7 +5,7 @@ Scripts currently available:
 - densityProfile.py (1-d cartesian density profile)
 - pressureProfiles.py (z-resolved pressure tensor elements, needs a dump file with compute stress/atom output)
 - velocityProfile.py (calculates velocity profiles along some dimension binned along another dimension, needs a dump file with unwrapped coordinates)
-- fitCircle.py (used with 2dDensity below, assuming some inhomogeneous structure where you want to fit a circle to some structure and estimate curvature / other properties)
+- fitCircle.py (used with 2dDensity below, assuming some inhomogeneous profile over a grid where you may want to estimate curvature / other properties)
 - pairCorrelation.py (RDFs)
 - vacf.py (velocity autocorrelation)
 - neighborsCutoff.py (calculate n nearest neighbors within a given cutoff as the most basic order parameter)
