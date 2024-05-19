@@ -8,3 +8,4 @@
 *.csv
 *.txt
 *.ipynb
+*_old*
