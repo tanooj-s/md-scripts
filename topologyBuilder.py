@@ -176,9 +176,9 @@ for a in atoms:
 atomsByType = {}
 for aType in range(1,1+n_types):
 	atomsByType[aType] = [a for a in atoms if a.atom_type == aType]
-print(atomsByType)
+print(len(atomsByType))
 
-exit()
+#exit()
 
 # ----- generate 2-bonds -----
 
@@ -195,10 +195,13 @@ for bType, [aType1, aType2] in bondDefs.items():
 	threshold = thresholds[tCounter]
 	for atom_i in type1_atoms:
 		for atom_j in type2_atoms:
-			if atom_i.atom_id < atom_j.atom_id:
+			if atom_i.atom_id != atom_j.atom_id:
 				rij = minimumImage(atom_i.position - atom_j.position)
 				dist = np.sqrt(np.dot(rij,rij))
+				#print(F"rij: {dist}")
 				if dist <= threshold:
+					print(F"rij: {dist}")
+					print(f"making bond {bondCounter}")
 					bonds.append(Bond(bond_id=bondCounter,
 									  bond_type=bType,
 									  atom1=atom_i,
