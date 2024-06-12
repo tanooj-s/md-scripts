@@ -1,0 +1,22 @@
+# parameters that interpolate between an ionic fluid and a "weakly associated" LJ fluid
+# note that the bulk of the interaction comes from the ionic fluid charges 
+# and also note that charges are included here because they're also force field params
+# ideally you'd also be able to scale charges over the course of a simulation
+
+set type 1 charge -1
+set type 2 charge +1
+set type 3 charge +1
+set type 4 charge +1
+pair_style hybrid/scaled v_opp born/coul/long 12.0 v_lam lj/cut 12.0
+pair_coeff 1 1 born/coul/long 4.978 0.238 2.340 207.209 328.306 # F-F  
+pair_coeff 2 2 born/coul/long 6.853 0.212 1.429 0.996 0.406 # Li-Li
+pair_coeff 3 3 born/coul/long 4.534 0.260 2.156 22.99 9.172 # Na-Na
+pair_coeff 4 4 born/coul/long 7.290 0.311 2.726 380.49 319.882 # K-K
+pair_coeff 1 2 born/coul/long 5.840739166 0.2246241305 1.8845 14.36593763 11.54522568 # F-Li
+pair_coeff 1 3 born/coul/long 4.75081593 0.2487569095 2.248 69.01981534 54.87460826 # F-Na
+pair_coeff 1 4 born/coul/long 6.024086653 0.2720624928 2.533 280.7863109 324.0666288 # F-K
+pair_coeff 2 3 born/coul/long 5.574181734 0.2347764895 1.7925 4.785189651 1.929723296 # Li-Na
+pair_coeff 2 4 born/coul/long 7.068123513 0.2567722726 2.0775 19.46710148 11.39614373 # Li-K
+pair_coeff 3 4 born/coul/long 5.749161678 0.2843589281 2.441 93.52788408 54.16601983 # Na-K
+pair_coeff * * lj/cut 0.001 2.2
+kspace_style ewald 1e-5

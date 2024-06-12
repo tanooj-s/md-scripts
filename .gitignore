@@ -9,3 +9,9 @@
 *.txt
 *.ipynb
 *_old*
+alch/*log
+alch/*data
+alch/*csv
+alch/*npy
+alch/*dump
+
