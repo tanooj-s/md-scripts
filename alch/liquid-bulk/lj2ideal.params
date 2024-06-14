@@ -4,3 +4,4 @@
 
 pair_style hybrid/scaled v_opp lj/cut 12.0
 pair_coeff * * lj/cut 0.001 2.2
+pair_modify tail yes

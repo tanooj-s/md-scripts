@@ -19,4 +19,5 @@ pair_coeff 2 3 born/coul/long 5.574181734 0.2347764895 1.7925 4.785189651 1.9297
 pair_coeff 2 4 born/coul/long 7.068123513 0.2567722726 2.0775 19.46710148 11.39614373 # Li-K
 pair_coeff 3 4 born/coul/long 5.749161678 0.2843589281 2.441 93.52788408 54.16601983 # Na-K
 pair_coeff * * lj/cut 0.001 2.2
+pair_modify tail yes
 kspace_style ewald 1e-5
