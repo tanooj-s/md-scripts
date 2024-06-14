@@ -10,3 +10,4 @@ run pullNumbers.py afterwards to calculate relevant energies and generate dU/dla
 
 *in principle* this should work for arbitrary force fields/other systems but that'll need a few months of proper vetting 
 
+this pathway (but not this specific system) was used for calculations in https://doi.org/10.2172/1924550
