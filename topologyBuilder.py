@@ -176,7 +176,10 @@ for a in atoms:
 atomsByType = {}
 for aType in range(1,1+n_types):
 	atomsByType[aType] = [a for a in atoms if a.atom_type == aType]
-print(len(atomsByType))
+
+for aType in atomsByType.keys():
+	print(f"Type: {aType}")
+	print(f"--{len(atomsByType[aType])}")
 
 #exit()
 
@@ -187,26 +190,31 @@ print(bondDefs)
 print('Iterating over pairs of atoms...')
 # iterate over bond definitions and create bonds 
 tCounter = 0 # counter to access threshold values for each bond type
-bondCounter = 1 # bondID to pass into lammps
+bondIndexer = 1 # bondID to pass into lammps
 start = time.time()
 for bType, [aType1, aType2] in bondDefs.items():
+	bondCounter = 0
 	type1_atoms = atomsByType[aType1]
+	print(f"Type{aType1}: {len(type1_atoms)}")
 	type2_atoms = atomsByType[aType2]
+	print(f"Type{aType2}: {len(type2_atoms)}")
 	threshold = thresholds[tCounter]
+	print(f"Threshold: {threshold}")
+	# np.pairwise or something here
 	for atom_i in type1_atoms:
 		for atom_j in type2_atoms:
+			#pair
 			if atom_i.atom_id != atom_j.atom_id:
 				rij = minimumImage(atom_i.position - atom_j.position)
 				dist = np.sqrt(np.dot(rij,rij))
-				#print(F"rij: {dist}")
 				if dist <= threshold:
-					print(F"rij: {dist}")
-					print(f"making bond {bondCounter}")
-					bonds.append(Bond(bond_id=bondCounter,
+					bonds.append(Bond(bond_id=bondIndexer,
 									  bond_type=bType,
 									  atom1=atom_i,
 									  atom2=atom_j))
+					bondIndexer += 1
 					bondCounter += 1
+	print(f"Created {bondCounter} type {bType} bonds between particle types {aType1} and {aType2}")
 	tCounter += 1
 end = time.time()
 print(f"Took {end-start} to find and create 2-bonds")
