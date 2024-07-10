@@ -97,8 +97,6 @@ with open(args.input,'r') as f:
 			doCollect = True
 		if previousLine.startswith('ITEM: TIMESTEP'):
 			if np.sum(N_t) > 0:
-				# TODO type specific normaliztion for compositions
-				# in each grid cell, divide count of that species by net 
 				X_t = N_t[1:-1,:,:] # only need cation counts for composition calculations 
 				for i in range(1,N_t.shape[0]-1): 
 					for j in range(N_t.shape[1]):  
