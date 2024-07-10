@@ -100,7 +100,7 @@ with open(args.input,'r') as f:
 				X_t = N_t[1:-1,:,:] # only need cation counts for composition calculations 
 				for i in range(1,N_t.shape[0]-1): 
 					for j in range(N_t.shape[1]):  
-						for k in range(N_t.shape[2]):  # x,y of numpy arrays are backwards
+						for k in range(N_t.shape[2]):  
 							if N_t[-1,j,k] != 0:
 								X_t[i-1,j,k] *= (200 / N_t[-1,j,k])
 							else:
