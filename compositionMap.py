@@ -1,23 +1,21 @@
-
 # output a 2d composition profile (e.g X(x,z)) for each atom species
-
-# output numpy file for now then later add plotting with appropriate colors here
 
 import argparse
 import numpy as np
 from tqdm import tqdm
 import time
+import matplotlib.pyplot as plt
 
 parser = argparse.ArgumentParser(description="calculate composition profiles")
 parser.add_argument('-i', action="store", dest="input")
-parser.add_argument('-o', action="store", dest="output") # numpy file!!!!!!!!!
+parser.add_argument('-o', action="store", dest="output") # should be .npy
 parser.add_argument('-dz', action="store", dest="dz") 
 parser.add_argument('-dx', action="store", dest="dx") # bin widths
 parser.add_argument('-minz', action="store", dest="minz")
 parser.add_argument('-maxz', action="store", dest="maxz")
 parser.add_argument('-minx', action="store", dest="minx")
 parser.add_argument('-maxx', action="store", dest="maxx")
-parser.add_argument('-start', action="store", dest="start")
+parser.add_argument('-start', action="store", dest="start") 
 parser.add_argument('-t', action="store", dest="atom_types") # atom types to use for composition profiles, string like '1 2 3 4'
 args = parser.parse_args()
 
@@ -47,7 +45,6 @@ print(f'MinX: {minx}')
 print(f'MaxX: {maxx}')
 nbinsz = int((maxz-minz)/dz) + 1
 nbinsx = int((maxx-minx)/dx) + 1
-#assert nbinsz == nbinsx
 print(f"nbinsz: {nbinsz}")
 print(f"nbinsx: {nbinsx}")
 
@@ -68,7 +65,6 @@ with open(args.input,'r') as f:
 print(f'{idIdx} {typeIdx} {xIdx} {yIdx} {zIdx}')
 
 # ---- parse data file ----
-
 Xs = [] # this will have shape (timesteps,ntypes,nbinsx,nbinsz)
 print("Parsing and analyzing dump directly to obtain composition profiles on a grid...")
 timestart = time.time()
@@ -116,11 +112,50 @@ Xs = np.array(Xs)
 print("Trajectory of densities:")
 print(Xs.shape)
 assert len(Xs.shape) == 4
-#assert densities.shape[1] == densities.shape[2]
-
-X = np.mean(Xs,axis=0) # don't use the first in case NaNs muck everything up (hack)
+X = np.mean(Xs,axis=0) 
 print("Time averaged")
 print(X.shape)
-print(f'{nCollected} timesteps averaged over for composition maps')
 with open(args.output,'wb') as f: np.save(f, X)
+
+# plot out 
+x = dx*np.arange(0,X.shape[1],1)
+y = dx*np.arange(0,X.shape[2],1)
+xmin, xmax = x[0], x[-1]
+ymin, ymax = y[0], y[-1]
+# colormap params
+scaledn, scaleup = (2/3), (4/3)
+vmins = [scaledn*46.5,scaledn*11.5,scaledn*42]
+vmaxs = [scaleup*46.5,scaleup*11.5,scaleup*42]
+components = ['LiF','NaF','KF']
+plt.rcParams['figure.figsize'] = (20,5)
+plt.rcParams['font.size'] = 18
+fig, axes = plt.subplots(1,3,sharey=True)
+for i in range(3):
+	xtent = dx*np.arange(0,X[i].shape[0],1)
+	ytent = dz*np.arange(0,X[i].shape[1],1)
+	pos = axes[i].imshow(X[i].T,origin='lower',vmin=vmins[i],vmax=vmaxs[i],extent=[xmin,xmax,ymin,ymax])
+	fig.colorbar(pos,ax=axes[i])
+	axes[i].set_title(f'{components[i]} X(x,z)')
+	axes[i].set_xlabel('x (A)')
+axes[0].set_ylabel('z (A)')
+fname = args.output[:-3] + ".png"
+plt.savefig(fname)
+plt.clf()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
