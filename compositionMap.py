@@ -77,12 +77,11 @@ with open(args.input,'r') as f:
 	for line in tqdm(f):
 		tokens = purge(line.strip('\n').split(' '))
 		if doCollect == True: 
-			# you only want to collect data when all tokens are numeric and are atomic data
 			checksum = np.sum([not isfloat(t) for t in tokens])
 			if (len(tokens) > 4) and (checksum == 0):
 				aType = int(tokens[1])
 				x = float(tokens[2])
-				z = float(tokens[4])  # TODO: figure out what's going with token indexing, this shouldn't be hardcoded
+				z = float(tokens[4])  
 				if (aType in atom_types) and (z >= minz) and (z <= maxz) and (x >= minx) and (x <= maxx):
 					typeIdx = aType-1
 					zIdx = int((z - minz)/dz)
@@ -107,9 +106,9 @@ with open(args.input,'r') as f:
 			N_t = np.zeros((5,nbinsx,nbinsz))
 		previousLine = line
 
-print(f"{round((time.time()-timestart)/60,4)} minutes to obtain density from {nCollected} timesteps")
+print(f"{round((time.time()-timestart)/60,4)} minutes to obtain compositions from {nCollected} timesteps")
 Xs = np.array(Xs)
-print("Trajectory of densities:")
+print("Trajectory of compositions:")
 print(Xs.shape)
 assert len(Xs.shape) == 4
 X = np.mean(Xs,axis=0) 
@@ -119,7 +118,7 @@ with open(args.output,'wb') as f: np.save(f, X)
 
 # plot out 
 x = dx*np.arange(0,X.shape[1],1)
-y = dx*np.arange(0,X.shape[2],1)
+y = dz*np.arange(0,X.shape[2],1)
 xmin, xmax = x[0], x[-1]
 ymin, ymax = y[0], y[-1]
 # colormap params
