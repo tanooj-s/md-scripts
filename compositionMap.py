@@ -137,7 +137,7 @@ for i in range(3):
 	axes[i].set_title(f'{components[i]} X(x,z)')
 	axes[i].set_xlabel('x (A)')
 axes[0].set_ylabel('z (A)')
-fname = args.output[:-3] + ".png"
+fname = args.output[:-4] + ".png"
 plt.savefig(fname)
 plt.clf()
 

@@ -18,11 +18,12 @@ parser = argparse.ArgumentParser(description="fit circle (estimate wetting angle
 parser.add_argument('-i', action="store", dest="input") # numpy file
 parser.add_argument('-title', action="store", dest="title") # title to put on plot
 parser.add_argument('-o', action="store", dest="output") # png file
+parser.add_argument('-dx', action="store", dest="dx")
+parser.add_argument('-dz', action="store", dest="dz")
 args = parser.parse_args()
 
-dx,dz = 1.5, 1.5 # note hardcoded bin widths to plot in true units, this needs to match input file 
+dx, dz = float(args.dz), float(args.dz) # note hardcoded bin widths to plot in true units, this needs to match input file 
 title = args.title
-
 
 def COM(field2d):
     '''
@@ -64,7 +65,9 @@ def dQdX(q):
 # file input and computation
 
 with open(args.input,'rb') as f: field = np.load(f)
-assert len(field.shape) == 2
+if len(field.shape) == 3: 
+    field = np.mean(field,axis=0)
+print(field.shape)
 assert field.shape[0] == field.shape[1]
 
 # get center of mass
@@ -185,7 +188,7 @@ plt.xticks(ticks=np.arange(0,field.shape[0],1)[::50],labels=dx*np.arange(0,field
 #plt.xticklabels(labels=dx*np.arange(0,field.shape[0],1)[::50])
 plt.yticks(ticks=np.arange(0,field.shape[1],1)[::50],labels=dz*np.arange(0,field.shape[1],1)[::50]),
 #plt.yticklabels(labels=dz*np.arange(0,field.shape[1],1)[::50])  
-plt.scatter(x=xmodel[::5],y=ymodel[::5],marker='x',color='r',sizes=[20])
+plt.scatter(x=xmodel[::10],y=ymodel[::10],marker='x',color='r',sizes=[20])
 plt.scatter(x=[x0],y=[hfit],marker='x',color='r',sizes=[50])
 #plt.title(f"θ={round(angle,2)}, error={round(error,2)} A")
 plt.title(f"{title}, θ={round(angle,2)}")
