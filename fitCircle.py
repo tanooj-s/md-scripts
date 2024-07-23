@@ -22,7 +22,7 @@ parser.add_argument('-dx', action="store", dest="dx")
 parser.add_argument('-dz', action="store", dest="dz")
 args = parser.parse_args()
 
-dx, dz = float(args.dz), float(args.dz) # note hardcoded bin widths to plot in true units, this needs to match input file 
+dx, dz = float(args.dx), float(args.dz) # note hardcoded bin widths to plot in true units, this needs to match input file 
 title = args.title
 
 def COM(field2d):
