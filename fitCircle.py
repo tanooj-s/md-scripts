@@ -20,9 +20,10 @@ parser.add_argument('-title', action="store", dest="title") # title to put on pl
 parser.add_argument('-o', action="store", dest="output") # png file
 parser.add_argument('-dx', action="store", dest="dx")
 parser.add_argument('-dz', action="store", dest="dz")
+parser.add_argument('-bump', action="store", dest="bump") # amount to widen initial angular scan below COM in degrees
 args = parser.parse_args()
 
-dx, dz = float(args.dx), float(args.dz) # note hardcoded bin widths to plot in true units, this needs to match input file 
+dx, dz = float(args.dz), float(args.dz) # note hardcoded bin widths to plot in true units, this needs to match input file 
 title = args.title
 
 def COM(field2d):
@@ -90,8 +91,8 @@ print(np.max(gradient))
 # given (x0,y0), (r,theta), find cartesian indices of the pixel corresponding to that polar coordinate
 xarc, yarc = [], [] # points along arc
 radii = [] # estimates of radius along angular scan, average this for initial guess for later hoptimization
-dtheta = 1 # degrees
-bump = 0 # angle value to bump limits by
+dtheta = 0.333333 # degrees
+bump = float(args.bump) # angle value to bump limits by
 downL = 0 - bump
 upL = 181 + bump # upper and lower limits for angular scan, parameters we would want to vary
 thetascan = np.arange(downL,upL,dtheta) # widen this range for angle as a function of selected data 
@@ -110,7 +111,7 @@ for t in thetascan:
     yarc.append(y0 + radius_idx * np.sin(t * (np.pi/180)))
 arc = np.vstack((np.array(xarc),np.array(yarc))).T
 radius_guess = np.mean(radii)
-print(f"Initial guess for droplet radius: {radius_guess}")
+print(f"Initial guess for droplet radius: {radius_guess*0.05*(dx+dz)} nm")
 
 # ------------------------------------------
 
@@ -131,10 +132,10 @@ def arcLoss(params):
     return distance_loss
 
 rinit, hinit = radius_guess, y0 # initial guess for the parameters we care about
-print(f"guessed (r,h): {[rinit, hinit]}")
+print(f"guessed (r,h): {[rinit*0.05*(dx+dz), hinit*0.05*(dx+dz)]}")
 opt_result = basinhopping(arcLoss,[rinit,hinit],niter=500,T=0.7,stepsize=0.1)
 [rfit,hfit] = opt_result.x
-print(f"fitted (r,h): {[rfit, hfit]}")
+print(f"fitted (r,h): {[rfit*0.05*(dx+dz), hfit*0.05*(dx+dz)]}")
 
 # range of thetas for constructed circle
 thetafit = (np.pi/180) * np.arange(downL,upL,1)
@@ -147,6 +148,7 @@ print(f"as a func of amount of data used")
 print(f"zselect: {zselect}")
 
 
+print("Generating model values....")
 # model values over the entire z > 0 range for output
 theta = np.arange(-90,271,1) * (np.pi/180)
 xmodel = x0 + rfit*np.cos(theta)
@@ -158,28 +160,34 @@ ymodel = ymodel[ymodel > 0]
 # calculate an appropriate error function from ground truth to assess goodness of fit
 # % error doesn't really make sense here
 # so instead just calculate a "mean distance" error
-xtrue = arc[:,0]
-ytrue = arc[:,1]
-idx = np.argsort(xtrue)
-xtrue, ytrue = xtrue[idx], ytrue[idx]
-error = 0
-counter = 0 
-for idx in range(len(xtrue)):
-	xtru, ytru = xtrue[idx], ytrue[idx]
-	xmod = np.mean(xmodel[np.abs(xmodel - xtru) < 1.5]) # find all x points close to ground truth
-	ymod = np.mean(ymodel[np.abs(xmodel - xtru) < 1.5]) # same for y
-	#print(f"{xtru} | {xmod} | {ytru} | {ymod}")
-	dist = ((xmod-xtru)**2 + (ymod-ytru)**2) ** 0.5
-	error += dist
-	counter += 1
-error /= counter
-error *= 0.5*(dx+dz) # bin width for mean distance error in angstroms
+
+calcErr = True
+if calcErr == True:
+    print("Calculating error metric...")
+    xtrue = arc[:,0]
+    ytrue = arc[:,1]
+    idx = np.argsort(xtrue)
+    xtrue, ytrue = xtrue[idx], ytrue[idx]
+    error = 0
+    counter = 0 
+    for idx in range(len(xtrue)):
+        xtru, ytru = xtrue[idx], ytrue[idx]
+        xmod = np.mean(xmodel[np.abs(xmodel - xtru) < 1.5]) # find all x points close to ground truth
+        ymod = np.mean(ymodel[np.abs(xmodel - xtru) < 1.5]) # same for y
+        #print(f"{xtru} | {xmod} | {ytru} | {ymod}")
+        dist = ((xmod-xtru)**2 + (ymod-ytru)**2) ** 0.5
+        error += dist
+        counter += 1
+    error /= counter
+    error *= 0.5*(dx+dz) # bin width for mean distance error in angstroms
+else:
+    error = 0
 print(f"Mean distance of model points from ground truth: {error} A")
 
 
 
 # plotting 1 panel 
-plt.rcParams['figure.figsize'] = (5,5)
+plt.rcParams['figure.figsize'] = (6,6)
 plt.rcParams['font.size'] = 14
 plt.imshow(gradient.T,origin='lower')
 plt.xlabel("x (A)")
@@ -188,10 +196,10 @@ plt.xticks(ticks=np.arange(0,field.shape[0],1)[::50],labels=dx*np.arange(0,field
 #plt.xticklabels(labels=dx*np.arange(0,field.shape[0],1)[::50])
 plt.yticks(ticks=np.arange(0,field.shape[1],1)[::50],labels=dz*np.arange(0,field.shape[1],1)[::50]),
 #plt.yticklabels(labels=dz*np.arange(0,field.shape[1],1)[::50])  
-plt.scatter(x=xmodel[::10],y=ymodel[::10],marker='x',color='r',sizes=[20])
+plt.scatter(x=xmodel[::5],y=ymodel[::5],marker='x',color='r',sizes=[20])
 plt.scatter(x=[x0],y=[hfit],marker='x',color='r',sizes=[50])
 #plt.title(f"θ={round(angle,2)}, error={round(error,2)} A")
-plt.title(f"{title}, θ={round(angle,2)}")
+plt.title(f"{title}, R={round(rfit*0.05*(dx+dz),2)}nm, θ={round(angle,2)}")
 plt.tight_layout()
 
 
