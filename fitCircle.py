@@ -133,7 +133,9 @@ def arcLoss(params):
 
 rinit, hinit = radius_guess, y0 # initial guess for the parameters we care about
 print(f"guessed (r,h): {[rinit*0.05*(dx+dz), hinit*0.05*(dx+dz)]}")
-opt_result = basinhopping(arcLoss,[rinit,hinit],niter=500,T=0.7,stepsize=0.1)
+bounds = [(0.5*rinit,1.5*rinit),(0,2*rinit)]
+minimizer_kwargs = {"bounds": bounds}
+opt_result = basinhopping(arcLoss,[rinit,hinit],niter=1000,T=0.5,stepsize=0.1,minimizer_kwargs=minimizer_kwargs)
 [rfit,hfit] = opt_result.x
 print(f"fitted (r,h): {[rfit*0.05*(dx+dz), hfit*0.05*(dx+dz)]}")
 
