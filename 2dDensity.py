@@ -1,6 +1,5 @@
 
-# output a 2d density profile from a LAMMPS dump file (e.g n(x,z))
-# can modify this to q(x,z), bin other atomic quantities 
+# output a 2d density profile from a LAMMPS dump file (e.g n(x,z),q(x,z) etc)
 
 import argparse
 import numpy as np
@@ -17,6 +16,7 @@ parser.add_argument('-maxz', action="store", dest="maxz")
 parser.add_argument('-minx', action="store", dest="minx")
 parser.add_argument('-maxx', action="store", dest="maxx")
 parser.add_argument('-start', action="store", dest="start")
+parser.add_argument('-end', action="store", dest="end")
 parser.add_argument('-t', action="store", dest="atom_types") # atom types to use for density profiles, string like '1 3 4'
 args = parser.parse_args()
 
@@ -27,6 +27,7 @@ maxz = float(args.maxz)
 minx = float(args.minx)
 maxx = float(args.maxx)
 start = int(args.start)
+end = int(args.end)
 atom_types = [int(t) for t in args.atom_types.split(' ')]
 print(f'Atom types to bin: {atom_types}')
 
@@ -68,6 +69,9 @@ print(f'{idIdx} {typeIdx} {xIdx} {yIdx} {zIdx}')
 
 # ---- parse data file ----
 
+# charge map system specific
+qMap = {1: -1., 2: 1., 3: 1., 4: 1.}
+
 densities = [] # this will have shape (timesteps,nbinsx,nbinsz)
 print("Parsing and analyzing dump directly to obtain scalar field (number density) on a grid...")
 timestart = time.time()
@@ -77,7 +81,7 @@ with open(args.input,'r') as f:
 	currentTime = 0
 	previousLine = '' # keep saving previous line 
 	density_t = np.zeros((nbinsx,nbinsz)) # density at this timestep
-	for line in tqdm(f):
+	for line in f:
 		tokens = purge(line.strip('\n').split(' '))
 		if doCollect == True: 
 			# you only want to collect data when all tokens are numeric and are atomic data
@@ -89,28 +93,29 @@ with open(args.input,'r') as f:
 				if (aType in atom_types) and (z >= minz) and (z <= maxz) and (x >= minx) and (x <= maxx):
 					zIdx = int((z - minz)/dz)
 					xIdx = int((x - minx)/dx)
-					density_t[xIdx,zIdx] += 1
+					# uncomment below as appropriate 
+					#q = qMap[aType] 
+					#density_t[xIdx,zIdx] += q # charge density
+					density_t[xIdx,zIdx] += 1 # number density 
 		if (currentTime >= start) and (previousLine.startswith('ITEM: ATOMS')):
 			doCollect = True
 		if previousLine.startswith('ITEM: TIMESTEP'):
 			if np.sum(density_t) > 0:
-				density_t /= np.sum(density_t) 
+				#density_t /= np.sum(density_t) 
 				densities.append(density_t)
 				nCollected += 1
-			currentTime = int(tokens[0])		
+			currentTime = int(tokens[0])
+			print(f"t={currentTime}")
+			if currentTime >= end:
+				break		
 			density_t = np.zeros((nbinsx,nbinsz))
 		previousLine = line
 
 print(f"{round((time.time()-timestart)/60,4)} minutes to obtain density from {nCollected} timesteps")
 densities = np.array(densities)
-print("Trajectory of densities:")
-print(densities.shape)
-assert len(densities.shape) == 3
-#assert densities.shape[1] == densities.shape[2]
-
-density = np.mean(densities[1:,:,:],axis=0) # don't use the first in case NaNs muck everything up (hack)
+density = np.mean(densities[1:,:,:],axis=0) # don't use the first timestep in case NaNs muck everything up (hack)
 print("Time averaged")
-print(density.shape)
+#print(density.shape)
 print(f'{nCollected} timesteps averaged over for 2d density')
-with open(args.output,'wb') as f: np.save(f, density)
+with open(args.output,'wb') as f: np.save(f, densities)
 
