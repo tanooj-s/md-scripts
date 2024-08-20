@@ -16,7 +16,6 @@ parser.add_argument('-maxz', action="store", dest="maxz")
 parser.add_argument('-minx', action="store", dest="minx")
 parser.add_argument('-maxx', action="store", dest="maxx")
 parser.add_argument('-start', action="store", dest="start") 
-parser.add_argument('-end', action="store", dest="end") 
 parser.add_argument('-t', action="store", dest="atom_types") # atom types to use for composition profiles, string like '1 2 3 4'
 args = parser.parse_args()
 
@@ -27,7 +26,6 @@ maxz = float(args.maxz)
 minx = float(args.minx)
 maxx = float(args.maxx)
 start = int(args.start)
-end = int(args.end)
 atom_types = [int(t) for t in args.atom_types.split(' ')]
 print(f'Atom types to bin: {atom_types}')
 
@@ -93,9 +91,6 @@ with open(args.input,'r') as f:
 		if (currentTime >= start) and (previousLine.startswith('ITEM: ATOMS')):
 			doCollect = True
 		if previousLine.startswith('ITEM: TIMESTEP'):
-			currentTime = int(tokens[0])
-				if currentTime >= end:
-					break
 			if np.sum(N_t) > 0:
 				X_t = N_t[1:-1,:,:] # only need cation counts for composition calculations 
 				for i in range(1,N_t.shape[0]-1): 
@@ -106,7 +101,8 @@ with open(args.input,'r') as f:
 							else:
 								X_t[i-1,j,k] = 0
 				Xs.append(X_t)
-				nCollected += 1		
+				nCollected += 1
+			currentTime = int(tokens[0])		
 			N_t = np.zeros((5,nbinsx,nbinsz))
 		previousLine = line
 
@@ -141,7 +137,7 @@ for i in range(3):
 	axes[i].set_title(f'{components[i]} X(x,z)')
 	axes[i].set_xlabel('x (A)')
 axes[0].set_ylabel('z (A)')
-fname = args.output[:-4] + ".png"
+fname = args.output[:-3] + ".png"
 plt.savefig(fname)
 plt.clf()
 
