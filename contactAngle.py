@@ -48,7 +48,8 @@ print(f"Density snapshots: {snapshots}")
 
 # ===============================
 
-def purge(tokens): return [t for t in tokens if len(t) >= 1] # purge empty strings from token lists
+def purge(tokens): # purge empty strings from token lists
+	return [t for t in tokens if len(t) >= 1] 
 
 def isfloat(s): # hack function to confirm tokens are numeric as floats
 	try:
@@ -89,20 +90,19 @@ def COM(field2d):
 	return (mean_x,mean_y)
 
 def arcLoss(params):
-    '''
-    calculate distance loss from ground truth points 
-    assume params are r, h
-    arc is a (npoints,2) shaped array to calculate loss from
-    note that it is not an argument of this function
-    also note xsplit is used as x coordinate of circle center
-    '''
-    r, h = params # guessed radius and center, x0 is fixed
-    distances = []
-    for pt in arc: 
-        distances.append(((pt[1]-h)**2 + (pt[0]-xsplit)**2) ** 0.5) # !!
-    distances = np.array(distances)
-    distance_loss = np.sum(((distances-r) / distances) ** 2)
-    return distance_loss
+	'''
+	calculate distance loss from ground truth points 
+	assume params are r, h
+	arc is a (npoints,2) shaped array to calculate loss from
+	note that it is not an argument of this function
+	also note xsplit is used as x coordinate of circle center
+	'''
+	r, h = params # guessed radius and center, x0 is fixed
+	distances = []
+	for pt in arc: distances.append(((pt[1]-h)**2 + (pt[0]-xsplit)**2) ** 0.5) # !!
+	distances = np.array(distances)
+	distance_loss = np.sum(((distances-r) / distances) ** 2)
+	return distance_loss
 
 # ===================================================
 
@@ -295,11 +295,3 @@ if doAnalyze:
 	axes.axhline(0,linestyle="dashed",color='k')
 	plt.savefig(pngfile,bbox_inches="tight")
 	for fname in glob.iglob(args.output.strip(".npy") + ".rho_*.png"): os.system(f"rm {fname}") # delete generated images 
-	
-
-
-
-
-
-
-	
