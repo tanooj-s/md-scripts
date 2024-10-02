@@ -156,7 +156,7 @@ if doCollect:
 					nCollected += 1	
 					# reset normalization nCollected if next time window is hit
 					if (currentTime-start) % window == 0:
-						#print(f"Averaging particle positions for snapshot index {tidx}...")	
+						print(f"Averaging particle positions for snapshot index {tidx}...")	
 						try: 
 							densities[tidx,:,:] /= nCollected
 						except IndexError:
@@ -180,12 +180,13 @@ if doAnalyze:
 	backward = []
 	times = [] # sim time ns
 	img_array = [] # for video
+	timestart = time.time()
 	for i in range(densities.shape[0]):
 		plt.rcParams['figure.figsize'] = (15,5)
 		plt.rcParams['font.size'] = 20
 		fig, axes = plt.subplots(1,2)
-		time = dt*(start+((i+1)*window)) # nanoseconds
-		times.append(time)
+		time_ns = dt*(start+((i+1)*window)) # nanoseconds
+		times.append(time_ns)
 		field = densities[i]
 		x0, y0 = COM(field)
 		dqdx = dQdX(field)
@@ -215,7 +216,7 @@ if doAnalyze:
 			radii = []
 			thetascan = (-180*j) + np.arange(91,271,0.1)
 			for t in thetascan:
-				x = xsplit + np.arange(0,int(0.4*gradient.shape[0]),1)*np.cos(t * (np.pi/180))
+				x = xsplit + np.arange(0,int(0.4*gradient.shape[0]),1)*np.cos(t * (np.pi/180)) # !!
 				y = y0 + np.arange(0,int(0.4*gradient.shape[0]),1)*np.sin(t * (np.pi/180))
 				xline = np.array([int(a) for a in np.floor(x)])
 				yline = np.array([int(a) for a in np.floor(y)])
@@ -249,7 +250,7 @@ if doAnalyze:
 			axes[j].axvline(xsplit,color='r',linestyle="dashed")
 			axes[j].set_xlabel("x (nm)")
 			axes[j].set_ylabel("z (nm)")
-			axes[j].set_title(f"t={round(time,3)}ns, θ={round(contact_angle,3)}°")
+			axes[j].set_title(f"t={round(time_ns,3)}ns, θ={round(contact_angle,3)}°")
 		pngfile = args.output.strip(".npy") + ".rho_" + str(i) + ".png"
 		plt.savefig(pngfile,bbox_inches="tight")
 		img = cv2.imread(pngfile)
@@ -258,6 +259,7 @@ if doAnalyze:
 		img_array.append(img)
 		plt.clf()
 	# make video
+	print(f"{round((time.time()-timestart)/60,4)} minutes to calculate contact angles")
 	mp4file = args.output.strip(".npy") + ".arcs.mp4"
 	out = cv2.VideoWriter(mp4file,cv2.VideoWriter_fourcc(*"mp4v"),5,size)
 	for img in img_array: out.write(img)
@@ -268,8 +270,7 @@ if doAnalyze:
 	csvfile = args.output.strip(".npy") + ".hyst.csv"
 	with open(csvfile,'w') as outf:
 		outf.write("time,forward,backward,hyst\n")
-		for i in range(len(hyst)):
-			outf.write(f"{times[i]},{forward[i]},{backward[i]},{hyst[i]}\n")
+		for i in range(len(hyst)): outf.write(f"{times[i]},{forward[i]},{backward[i]},{hyst[i]}\n")
 	# generate a single 3 panel plot with forward, backward, hysteresis as a function of time
 	pngfile = args.output.strip(".npy") + ".hyst.png"
 	plt.rcParams["figure.figsize"] = (12,6)
@@ -291,6 +292,7 @@ if doAnalyze:
 	axes.grid()
 	axes.set_xlabel("Sim time (ns)")
 	axes.set_ylabel("Hysteresis (°)")
+	axes.axhline(0,linestyle="dashed",color='k')
 	plt.savefig(pngfile,bbox_inches="tight")
 	for fname in glob.iglob(args.output.strip(".npy") + ".rho_*.png"): os.system(f"rm {fname}") # delete generated images 
 	
