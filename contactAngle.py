@@ -287,7 +287,7 @@ if doAnalyze:
 	out.release()	
 	# calculate hysteresis and write measurements to csv file
 	times, forward, backward = np.array(times), np.array(forward), np.array(backward)
-	hyst = forward - backward # only caclculate 
+	hyst = forward - backward 
 	csvfile = args.output.strip(".npy") + ".hyst.csv"
 	with open(csvfile,'w') as outf:
 		outf.write("time,forward,backward,hyst\n")
