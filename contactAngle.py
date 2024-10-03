@@ -109,7 +109,7 @@ def angularscan(field2d,center,thetalim,ylo):
 	given an (x,y) center coordinate of a 2d field (assumed to be gradient)
 	and given a range of theta in degrees
 	perform an angular scan to return points [(x,y),(x,y)...] of an arc
-	ylo scalar lower limit to not use data from flat
+	ylo scalar lower limit to not use data from flat part of profile
 	'''
 	xarc, yarc = [], []
 	for t in thetalim:
@@ -218,9 +218,8 @@ if doAnalyze:
 			xsplit = x0 # actually redundant but using xsplit variable name in arcLoss function
 			arc = np.array((xarc,yarc)).T # for loss function
 			r = np.add((xarc-x0)**2,(yarc-y0)**2)**0.5 # array of distances of ground truth points from center
-			radius_guess = np.mean(r)
-			rinit, hinit = radius_guess, y0
-			[rfit, hfit] = basinhopping(arcLoss,[rinit,hinit],niter=500,T=0.7,stepsize=0.1,minimizer_kwargs={"bounds":[(0.25*rinit,4*rinit),(-2*rinit,2*rinit)]}).x
+			rinit = np.mean(r)
+			[rfit, hfit] = basinhopping(arcLoss,[rinit,y0],niter=500,T=0.7,stepsize=0.1,minimizer_kwargs={"bounds":[(0.25*rinit,4*rinit),(-2*rinit,2*rinit)]}).x
 			axes.scatter([xsplit],[hfit],color='r',marker='x')
 			if hfit <= rfit: # otherwise skip this snapshot
 				contact_angle = 90 + (180/np.pi) * np.arcsin(hfit/rfit)
@@ -253,8 +252,8 @@ if doAnalyze:
 				arc = np.array((xarc,yarc)).T # for loss function
 				r = np.add((xarc-xsplit)**2,(yarc-y0)**2)**0.5
 				radius_guess = np.mean(r)
-				rinit, hinit = radius_guess, y0
-				[rfit, hfit] = basinhopping(arcLoss,[rinit,hinit],niter=500,T=0.7,stepsize=0.1,minimizer_kwargs={"bounds":[(0.25*rinit,4*rinit),(-2*rinit,2*rinit)]}).x
+				rinit = np.mean(r)
+				[rfit, hfit] = basinhopping(arcLoss,[rinit,y0],niter=500,T=0.7,stepsize=0.1,minimizer_kwargs={"bounds":[(0.25*rinit,4*rinit),(-2*rinit,2*rinit)]}).x
 				axes[j].scatter([xsplit],[hfit],color='r',marker='x')
 				if hfit <= rfit: 
 					contact_angle = 90 + (180/np.pi) * np.arcsin(hfit/rfit)
