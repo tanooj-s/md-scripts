@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import cv2
 from scipy.optimize import basinhopping
 
-parser = argparse.ArgumentParser(description="calculate density profiles")
+parser = argparse.ArgumentParser(description="calculate contact angle from molecular dynamics data")
 parser.add_argument('-i', action="store", dest="input") # .dump
 parser.add_argument('-o', action="store", dest="output") # .npy
 parser.add_argument('-dz', action="store", dest="dz") 
@@ -23,6 +23,7 @@ parser.add_argument('-end', action="store", dest="end") # timestep
 parser.add_argument('-window', action="store", dest="window") # window to average over (in timesteps) for each density snapshot
 parser.add_argument('-collect', action="store", dest="collect") # collect data y or n
 parser.add_argument('-analyze', action="store", dest="analyze") # analyze data y or n
+parser.add_argument('-mode', action="store", dest="mode") # "static" or "dynamic", fitting procedure is different
 parser.add_argument('-t', action="store", dest="atom_types") # atom types to use for analysis, string like '1 2'
 args = parser.parse_args()
 
@@ -40,6 +41,7 @@ window = int(args.window)
 snapshots = int(np.floor((end-start)/window))
 assert args.collect in ['y','n']
 assert args.analyze in ['y','n']
+assert args.mode in ["static","dynamic"]
 doCollect = True if args.collect == 'y' else False
 doAnalyze = True if args.analyze == 'y' else False
 atom_types = [int(t) for t in args.atom_types.split(' ')]
@@ -102,6 +104,29 @@ def arcLoss(params):
 	distance_loss = np.sum(((distances-r) / distances) ** 2)
 	return distance_loss
 
+def angularscan(field2d,center,thetalim,ylo):
+	'''
+	given an (x,y) center coordinate of a 2d field (assumed to be gradient)
+	and given a range of theta in degrees
+	perform an angular scan to return points [(x,y),(x,y)...] of an arc
+	ylo scalar lower limit to not use data from flat
+	'''
+	xarc, yarc = [], []
+	for t in thetalim:
+		x = center[0] + np.arange(0,int(0.4*field2d.shape[0]),1)*np.cos(t * (np.pi/180))
+		y = center[1] + np.arange(0,int(0.4*field2d.shape[0]),1)*np.sin(t * (np.pi/180)) # length of line segment is a bit hacky
+		xline = np.array([int(a) for a in np.floor(x) if not np.isnan(a)])
+		yline = np.array([int(a) for a in np.floor(y) if not np.isnan(a)])
+		if (len(xline) > 0) and (len(yline) > 0):
+			line = field2d[xline,yline] # gradient values along this line segment
+			edge_idx = np.argmax(line)
+			xarc.append(center[0] + edge_idx * np.cos(t * (np.pi/180)))
+			yarc.append(center[1] + edge_idx * np.sin(t * (np.pi/180)))
+	xarc, yarc = np.array(xarc), np.array(yarc)
+	xarc, yarc = xarc[yarc > ylo], yarc[yarc > ylo]
+	return xarc, yarc
+
+
 # ===================================================
 
 if doCollect:
@@ -154,8 +179,9 @@ if doCollect:
 					# reset normalization nCollected if next time window is hit
 					if (currentTime-start) % window == 0:
 						print(f"Averaging particle positions for snapshot index {tidx}...")	 
-						densities[tidx,:,:] /= nCollected
-						nCollected = 0
+						if tidx < densities.shape[0]: # off by one error given certain end flag + window flag combinations 
+							densities[tidx,:,:] /= nCollected
+							nCollected = 0
 			previousLine = line
 		print(f"{round((time.time()-timestart)/60,4)} minutes to obtain densities")
 	# TODO there should also be metadata about averaging window
@@ -167,75 +193,75 @@ if doAnalyze:
 	if doCollect == False: 
 		with open(args.output,'rb') as f: densities = np.load(f)
 	print(f"{densities.shape[0]} gradient snapshots to fit circles to")
-	print(f"{2*densities.shape[0]} contact angles to measure")
 	# iterate over snapshots, measure forward, backward angles for each and save to output later
-	# contact angle hysteresis calculated as per method in DOI: 10.1021/acs.langmuir.9b00551 
-	forward = []
-	backward = []
-	times = [] # sim time ns
+	# contact angle hysteresis for dynamic case calculated as per method in DOI: 10.1021/acs.langmuir.9b00551 
+	forward = np.zeros(densities.shape[0])
+	backward = np.zeros(densities.shape[0])
+	times = np.zeros(densities.shape[0]) # sim time ns
 	img_array = [] # for video
 	timestart = time.time()
 	for i in range(densities.shape[0]):
 		plt.rcParams['figure.figsize'] = (15,5)
 		plt.rcParams['font.size'] = 20
-		fig, axes = plt.subplots(1,2)
 		time_ns = dt*(start+((i+1)*window)) # nanoseconds
+		times[i] = time_ns
 		field = densities[i]
 		x0, y0 = COM(field)
 		dqdx = dQdX(field)
 		dqdy = dQdY(field)
-		gradient = (dqdx**2 + dqdy**2) ** 0.5
-		# find x index of highest point
-		# do a dense angular scan to find ground truth points, then given [(x,y),(x,y)...], find index of point with maximum y
-		# use x corresponding to this point to split data
-		xarc, yarc = [], []
-		thetascan = np.arange(0,181,0.05) 
-		for t in thetascan:
-			x = x0 + np.arange(0,int(0.4*gradient.shape[0]),1)*np.cos(t * (np.pi/180))
-			y = y0 + np.arange(0,int(0.4*gradient.shape[0]),1)*np.sin(t * (np.pi/180)) # length of line segment is a bit hacky
-			xline = np.array([int(a) for a in np.floor(x) if not np.isnan(a)])
-			yline = np.array([int(a) for a in np.floor(y) if not np.isnan(a)])
-			if (len(xline) > 0) and (len(yline) > 0):
-				line = gradient[xline,yline] # gradient values along this line segment
-				edge_idx = np.argmax(line)
-				xarc.append(x0 + edge_idx * np.cos(t * (np.pi/180)))
-				yarc.append(y0 + edge_idx * np.sin(t * (np.pi/180)))
-		if (len(xarc) > 0) and (len(yarc) > 0):
-			xarc, yarc = np.array(xarc), np.array(yarc)  
+		gradient = (dqdx**2 + dqdy**2) ** 0.5	
+		if args.mode == "static":
+			fig, axes = plt.subplots(1,1)
+			# use entire arc of ground truth points to fit one circle with one curvature R
+			thetascan = np.arange(-90,271,0.05)
+			xarc, yarc = angularscan(gradient,(x0,y0),thetascan,2)
+			xsplit = x0 # actually redundant but using xsplit variable name in arcLoss function
+			arc = np.array((xarc,yarc)).T # for loss function
+			r = np.add((xarc-x0)**2,(yarc-y0)**2)**0.5 # array of distances of ground truth points from center
+			radius_guess = np.mean(r)
+			rinit, hinit = radius_guess, y0
+			[rfit, hfit] = basinhopping(arcLoss,[rinit,hinit],niter=500,T=0.7,stepsize=0.1,minimizer_kwargs={"bounds":[(0.25*rinit,4*rinit),(-2*rinit,2*rinit)]}).x
+			axes.scatter([xsplit],[hfit],color='r',marker='x')
+			if hfit <= rfit: # otherwise skip this snapshot
+				contact_angle = 90 + (180/np.pi) * np.arcsin(hfit/rfit)
+				forward[i] = contact_angle
+				backward[i] = contact_angle		
+				thetamodel = np.arange(-90,271,8) # range of model to output
+				xfit = x0 + rfit*np.cos(thetamodel*np.pi/180)
+				yfit = hfit + rfit*np.sin(thetamodel*np.pi/180)
+				xfit = xfit[np.where(yfit > 0)]
+				yfit = yfit[np.where(yfit > 0)]
+				axes.imshow(gradient.T,origin="lower")
+				axes.scatter(xfit,yfit,color='r',marker='x',sizes=[15]*len(xfit))
+				axes.axvline(xsplit,color='r',linestyle="dashed")
+				axes.set_xlabel("x (nm)")
+				axes.set_ylabel("z (nm)")
+				axes.set_title(f"t={round(time_ns,3)}ns, θ={round(contact_angle,3)}°")
+		elif args.mode == "dynamic":
+			fig, axes = plt.subplots(1,2)
+			# find x index of highest point
+			# do a dense angular scan to find ground truth points, then given [(x,y),(x,y)...], find index of point with maximum y
+			# use x corresponding to this point to split data for two circles and measure two contact angles
+			thetascan = np.arange(0,181,0.05)
+			xarc, yarc = angularscan(gradient,(x0,y0),thetascan,2)
 			ymaxidx = np.argmax(yarc)
 			xsplit = xarc[ymaxidx]
-			ground_truth = np.vstack((xarc,yarc))
-			times.append(time_ns)
 			# now do a broader scan from (xsplit, y0) on either side to obtain advancing and receding contact angle
 			for j in [0,1]:
-				arc = []
-				radii = []
 				thetascan = (-180*j) + np.arange(91,271,0.1)
-				for t in thetascan:
-					x = xsplit + np.arange(0,int(0.4*gradient.shape[0]),1)*np.cos(t * (np.pi/180)) # !!
-					y = y0 + np.arange(0,int(0.4*gradient.shape[0]),1)*np.sin(t * (np.pi/180))
-					xline = np.array([int(a) for a in np.floor(x)])
-					yline = np.array([int(a) for a in np.floor(y)])
-					line = gradient[xline,yline]
-					edge_idx = np.argmax(line)
-					radii.append(edge_idx)
-					xpoint = xsplit + edge_idx * np.cos(t * (np.pi/180)) # !!
-					ypoint = y0 + edge_idx * np.sin(t * (np.pi/180))
-					if ypoint > 2: # so that flat parts of profile near substrate aren't used for fits
-						arc.append(np.array([xpoint,ypoint]))
-				radius_guess = np.mean(radii)
-				arc = np.array(arc)
+				xarc, yarc = angularscan(gradient,(xsplit,y0),thetascan,2)
+				arc = np.array((xarc,yarc)).T # for loss function
+				r = np.add((xarc-xsplit)**2,(yarc-y0)**2)**0.5
+				radius_guess = np.mean(r)
 				rinit, hinit = radius_guess, y0
-				bounds = [(0.25*rinit,4*rinit),(-2*rinit,2*rinit)]
-				opt_result = basinhopping(arcLoss,[rinit,hinit],niter=500,T=0.7,stepsize=0.1,minimizer_kwargs={"bounds":bounds})
-				[rfit,hfit] = opt_result.x
+				[rfit, hfit] = basinhopping(arcLoss,[rinit,hinit],niter=500,T=0.7,stepsize=0.1,minimizer_kwargs={"bounds":[(0.25*rinit,4*rinit),(-2*rinit,2*rinit)]}).x
 				axes[j].scatter([xsplit],[hfit],color='r',marker='x')
-				if hfit <= rfit: # otherwise skip this snapshot
+				if hfit <= rfit: 
 					contact_angle = 90 + (180/np.pi) * np.arcsin(hfit/rfit)
 					if j == 0: 
-						forward.append(contact_angle)
+						forward[i] = contact_angle
 					else: 
-						backward.append(contact_angle)			
+						backward[i] = contact_angle		
 					thetamodel = (-90*j) + np.arange(45,226,8) # range of model to output
 					xfit = xsplit + rfit*np.cos(thetamodel*np.pi/180)
 					yfit = hfit + rfit*np.sin(thetamodel*np.pi/180)
@@ -262,7 +288,7 @@ if doAnalyze:
 	out.release()	
 	# calculate hysteresis and write measurements to csv file
 	times, forward, backward = np.array(times), np.array(forward), np.array(backward)
-	hyst = forward - backward
+	hyst = forward - backward # only caclculate 
 	csvfile = args.output.strip(".npy") + ".hyst.csv"
 	with open(csvfile,'w') as outf:
 		outf.write("time,forward,backward,hyst\n")
