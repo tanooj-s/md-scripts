@@ -66,16 +66,14 @@ def dQdY(q):
 	assume x is axis 0, y is axis 1
 	'''
 	dq = np.zeros(q.shape)
-	for i in range(1,q.shape[1]-1):
-		dq[:,i] = 0.5 * ((q[:,i+1]-q[:,i]) + (q[:,i]-q[:,i-1]))
+	for i in range(1,q.shape[1]-1): dq[:,i] = 0.5 * ((q[:,i+1]-q[:,i]) + (q[:,i]-q[:,i-1]))
 	dq[:,0] = 0.5 * ((q[:,1]-q[:,0]) + (q[:,0]-q[:,-1]))
 	dq[:,-1] = 0.5 * ((q[:,0]-q[:,-1]) + (q[:,-1]-q[:,-2]))
 	return dq # note this is in terms of grid spacings
 
 def dQdX(q):
 	dq = np.zeros(q.shape)
-	for i in range(1,q.shape[0]-1):
-		dq[i,:] = 0.5 * ((q[i+1,:]-q[i,:]) + (q[i,:]-q[i-1,:]))
+	for i in range(1,q.shape[0]-1): dq[i,:] = 0.5 * ((q[i+1,:]-q[i,:]) + (q[i,:]-q[i-1,:]))
 	dq[0,:] = 0.5 * ((q[1,:]-q[0,:]) + (q[0,:]-q[-1,:]))
 	dq[-1,:] = 0.5 * ((q[0,:]-q[-1,:]) + (q[-1,:]-q[-2,:]))
 	return dq 
@@ -119,48 +117,44 @@ if doCollect:
 	print("Parsing and analyzing dump directly to obtain scalar fields on a grid")
 	timestart = time.time()
 	tidx = None # time index for numpy array above
+	nCollected = 0
 	with open(args.input,'r') as f:
-		nCollected = 0 # dump timesteps averaged over for this output snapshot
 		currentTime = 0 # simulation timestep
 		previousLine = ''
 		for line in f:
-			tokens = purge(line.strip('\n').split(' '))
-			checksum = np.sum([not isfloat(t) for t in tokens]) 
-			if line.startswith("ITEM: ATOMS"):
-				typeIdx = tokens.index('type') - 2
-				xIdx = tokens.index('x') - 2
-				yIdx = tokens.index('y') - 2 # note different naming convention for histogram indices below
-				zIdx = tokens.index('z') - 2
-				#qIdx = tokens.index('q') - 2 # ... 
-			if (len(tokens) == 5) and (checksum == 0): # first check to make sure box bound lines aren't being used
-				aType = int(tokens[typeIdx])
-				x = float(tokens[xIdx]) 
-				z = float(tokens[zIdx])  
-				if (aType in atom_types) and (z >= minz) and (z <= maxz) and (x >= minx) and (x <= maxx):			
-					zidx = int((z-minz)/dz)
-					xidx = int((x-minx)/dx)
-					if type(tidx) is int: 
-						try: 
-							densities[tidx,xidx,zidx] += 1 # number density 
-						except IndexError:
-							pass 
+			if type(tidx) is int:
+				if tidx < densities.shape[0]:
+					tokens = purge(line.strip('\n').split(' '))
+					if line.startswith("ITEM: ATOMS"):
+						typeIdx = tokens.index('type') - 2
+						xIdx = tokens.index('x') - 2
+						yIdx = tokens.index('y') - 2 # note different naming convention for histogram indices below
+						zIdx = tokens.index('z') - 2
+						#qIdx = tokens.index('q') - 2 # ... 
+					if (len(tokens) > 2):
+						checksum = np.sum([not isfloat(t) for t in tokens]) 
+						if checksum == 0: # first check to make sure box bound lines aren't being used
+							aType = int(tokens[typeIdx])
+							x = float(tokens[xIdx]) 
+							z = float(tokens[zIdx])  
+							if (aType in atom_types) and (z >= minz) and (z <= maxz) and (x >= minx) and (x <= maxx):			
+								zidx = int((z-minz)/dz)
+								xidx = int((x-minx)/dx)
+								densities[tidx,xidx,zidx] += 1 # number density 
 			if previousLine.startswith('ITEM: TIMESTEP'):
-				currentTime = int(tokens[0])
+				currentTime = int(line.strip('\n'))
 				if currentTime < start: 
-					#print(f"Skipping data collection at t={currentTime}")
-					tidx = None
+					print(f"Skipping data collection for timestep {currentTime}")
+					tidx = None 
 				elif currentTime >= end:
 					break
 				else:
-					tidx = int(np.floor((currentTime-start) / window))
+					tidx = int(np.floor((currentTime-start)/window))
 					nCollected += 1	
 					# reset normalization nCollected if next time window is hit
 					if (currentTime-start) % window == 0:
-						print(f"Averaging particle positions for snapshot index {tidx}...")	
-						try: 
-							densities[tidx,:,:] /= nCollected
-						except IndexError:
-							pass 
+						print(f"Averaging particle positions for snapshot index {tidx}...")	 
+						densities[tidx,:,:] /= nCollected
 						nCollected = 0
 			previousLine = line
 		print(f"{round((time.time()-timestart)/60,4)} minutes to obtain densities")
@@ -186,7 +180,6 @@ if doAnalyze:
 		plt.rcParams['font.size'] = 20
 		fig, axes = plt.subplots(1,2)
 		time_ns = dt*(start+((i+1)*window)) # nanoseconds
-		times.append(time_ns)
 		field = densities[i]
 		x0, y0 = COM(field)
 		dqdx = dQdX(field)
@@ -200,57 +193,60 @@ if doAnalyze:
 		for t in thetascan:
 			x = x0 + np.arange(0,int(0.4*gradient.shape[0]),1)*np.cos(t * (np.pi/180))
 			y = y0 + np.arange(0,int(0.4*gradient.shape[0]),1)*np.sin(t * (np.pi/180)) # length of line segment is a bit hacky
-			xline = np.array([int(a) for a in np.floor(x)])
-			yline = np.array([int(a) for a in np.floor(y)])
-			line = gradient[xline,yline] # gradient values along this line segment
-			edge_idx = np.argmax(line)
-			xarc.append(x0 + edge_idx * np.cos(t * (np.pi/180)))
-			yarc.append(y0 + edge_idx * np.sin(t * (np.pi/180)))
-		xarc, yarc = np.array(xarc), np.array(yarc)  
-		ymaxidx = np.argmax(yarc)
-		xsplit = xarc[ymaxidx]
-		ground_truth = np.vstack((xarc,yarc))
-		# now do a broader scan from (xsplit, y0) on either side to obtain advancing and receding contact angle
-		for j in [0,1]:
-			arc = []
-			radii = []
-			thetascan = (-180*j) + np.arange(91,271,0.1)
-			for t in thetascan:
-				x = xsplit + np.arange(0,int(0.4*gradient.shape[0]),1)*np.cos(t * (np.pi/180)) # !!
-				y = y0 + np.arange(0,int(0.4*gradient.shape[0]),1)*np.sin(t * (np.pi/180))
-				xline = np.array([int(a) for a in np.floor(x)])
-				yline = np.array([int(a) for a in np.floor(y)])
-				line = gradient[xline,yline]
+			xline = np.array([int(a) for a in np.floor(x) if not np.isnan(a)])
+			yline = np.array([int(a) for a in np.floor(y) if not np.isnan(a)])
+			if (len(xline) > 0) and (len(yline) > 0):
+				line = gradient[xline,yline] # gradient values along this line segment
 				edge_idx = np.argmax(line)
-				radii.append(edge_idx)
-				xpoint = xsplit + edge_idx * np.cos(t * (np.pi/180)) # !!
-				ypoint = y0 + edge_idx * np.sin(t * (np.pi/180))
-				if ypoint > 2: # so that flat parts of profile near substrate aren't used for fits
-					arc.append(np.array([xpoint,ypoint]))
-			radius_guess = np.mean(radii)
-			arc = np.array(arc)
-			rinit, hinit = radius_guess, y0
-			bounds = [(0.25*rinit,4*rinit),(0,2*rinit)]
-			opt_result = basinhopping(arcLoss,[rinit,hinit],niter=500,T=0.7,stepsize=0.1,minimizer_kwargs={"bounds":bounds})
-			[rfit,hfit] = opt_result.x
-			axes[j].scatter([xsplit],[hfit],color='r',marker='x')
-			contact_angle = 90 + (180/np.pi) * np.arcsin(hfit/rfit)
-			if np.isnan(contact_angle): contact_angle = 0 # error handling 
-			if j == 0: 
-				forward.append(contact_angle)
-			else: 
-				backward.append(contact_angle)			
-			thetamodel = (-90*j) + np.arange(60,211,8) # range of model to output
-			xfit = xsplit + rfit*np.cos(thetamodel*np.pi/180)
-			yfit = hfit + rfit*np.sin(thetamodel*np.pi/180)
-			xfit = xfit[np.where(yfit > 0)]
-			yfit = yfit[np.where(yfit > 0)]
-			axes[j].imshow(gradient.T,origin="lower")
-			axes[j].scatter(xfit,yfit,color='r',marker='x',sizes=[15]*len(xfit))
-			axes[j].axvline(xsplit,color='r',linestyle="dashed")
-			axes[j].set_xlabel("x (nm)")
-			axes[j].set_ylabel("z (nm)")
-			axes[j].set_title(f"t={round(time_ns,3)}ns, θ={round(contact_angle,3)}°")
+				xarc.append(x0 + edge_idx * np.cos(t * (np.pi/180)))
+				yarc.append(y0 + edge_idx * np.sin(t * (np.pi/180)))
+		if (len(xarc) > 0) and (len(yarc) > 0):
+			xarc, yarc = np.array(xarc), np.array(yarc)  
+			ymaxidx = np.argmax(yarc)
+			xsplit = xarc[ymaxidx]
+			ground_truth = np.vstack((xarc,yarc))
+			times.append(time_ns)
+			# now do a broader scan from (xsplit, y0) on either side to obtain advancing and receding contact angle
+			for j in [0,1]:
+				arc = []
+				radii = []
+				thetascan = (-180*j) + np.arange(91,271,0.1)
+				for t in thetascan:
+					x = xsplit + np.arange(0,int(0.4*gradient.shape[0]),1)*np.cos(t * (np.pi/180)) # !!
+					y = y0 + np.arange(0,int(0.4*gradient.shape[0]),1)*np.sin(t * (np.pi/180))
+					xline = np.array([int(a) for a in np.floor(x)])
+					yline = np.array([int(a) for a in np.floor(y)])
+					line = gradient[xline,yline]
+					edge_idx = np.argmax(line)
+					radii.append(edge_idx)
+					xpoint = xsplit + edge_idx * np.cos(t * (np.pi/180)) # !!
+					ypoint = y0 + edge_idx * np.sin(t * (np.pi/180))
+					if ypoint > 2: # so that flat parts of profile near substrate aren't used for fits
+						arc.append(np.array([xpoint,ypoint]))
+				radius_guess = np.mean(radii)
+				arc = np.array(arc)
+				rinit, hinit = radius_guess, y0
+				bounds = [(0.25*rinit,4*rinit),(-2*rinit,2*rinit)]
+				opt_result = basinhopping(arcLoss,[rinit,hinit],niter=500,T=0.7,stepsize=0.1,minimizer_kwargs={"bounds":bounds})
+				[rfit,hfit] = opt_result.x
+				axes[j].scatter([xsplit],[hfit],color='r',marker='x')
+				if hfit <= rfit: # otherwise skip this snapshot
+					contact_angle = 90 + (180/np.pi) * np.arcsin(hfit/rfit)
+					if j == 0: 
+						forward.append(contact_angle)
+					else: 
+						backward.append(contact_angle)			
+					thetamodel = (-90*j) + np.arange(45,226,8) # range of model to output
+					xfit = xsplit + rfit*np.cos(thetamodel*np.pi/180)
+					yfit = hfit + rfit*np.sin(thetamodel*np.pi/180)
+					xfit = xfit[np.where(yfit > 0)]
+					yfit = yfit[np.where(yfit > 0)]
+					axes[j].imshow(gradient.T,origin="lower")
+					axes[j].scatter(xfit,yfit,color='r',marker='x',sizes=[15]*len(xfit))
+					axes[j].axvline(xsplit,color='r',linestyle="dashed")
+					axes[j].set_xlabel("x (nm)")
+					axes[j].set_ylabel("z (nm)")
+					axes[j].set_title(f"t={round(time_ns,3)}ns, θ={round(contact_angle,3)}°")
 		pngfile = args.output.strip(".npy") + ".rho_" + str(i) + ".png"
 		plt.savefig(pngfile,bbox_inches="tight")
 		img = cv2.imread(pngfile)
@@ -265,7 +261,7 @@ if doAnalyze:
 	for img in img_array: out.write(img)
 	out.release()	
 	# calculate hysteresis and write measurements to csv file
-	forward, backward = np.array(forward), np.array(backward)
+	times, forward, backward = np.array(times), np.array(forward), np.array(backward)
 	hyst = forward - backward
 	csvfile = args.output.strip(".npy") + ".hyst.csv"
 	with open(csvfile,'w') as outf:
@@ -277,6 +273,9 @@ if doAnalyze:
 	fig = plt.figure()
 	subfigs = fig.subfigures(2,1) # need matplotlib version >= 3.5.3 
 	axes = subfigs[0].subplots(1,2,sharey=True)
+	print(times)
+	print(forward)
+	print(backward)
 	axes[0].scatter(times,forward,label="advancing")
 	axes[0].plot(times,forward)
 	axes[1].scatter(times,backward,label="receding")
