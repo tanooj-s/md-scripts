@@ -243,35 +243,38 @@ if doAnalyze:
 			# use x corresponding to this point to split data for two circles and measure two contact angles
 			thetascan = np.arange(0,181,0.05)
 			xarc, yarc = angularscan(gradient,(x0,y0),thetascan,2)
-			ymaxidx = np.argmax(yarc)
-			xsplit = xarc[ymaxidx]
-			# now do a broader scan from (xsplit, y0) on either side to obtain advancing and receding contact angle
-			for j in [0,1]:
-				thetascan = (-180*j) + np.arange(91,271,0.1)
-				xarc, yarc = angularscan(gradient,(xsplit,y0),thetascan,2)
-				arc = np.array((xarc,yarc)).T # for loss function
-				r = np.add((xarc-xsplit)**2,(yarc-y0)**2)**0.5
-				radius_guess = np.mean(r)
-				rinit = np.mean(r)
-				[rfit, hfit] = basinhopping(arcLoss,[rinit,y0],niter=500,T=0.7,stepsize=0.1,minimizer_kwargs={"bounds":[(0.25*rinit,4*rinit),(-2*rinit,2*rinit)]}).x
-				axes[j].scatter([xsplit],[hfit],color='r',marker='x')
-				if hfit <= rfit: 
-					contact_angle = 90 + (180/np.pi) * np.arcsin(hfit/rfit)
-					if j == 0: 
-						forward[i] = contact_angle
-					else: 
-						backward[i] = contact_angle		
-					thetamodel = (-90*j) + np.arange(45,226,8) # range of model to output
-					xfit = xsplit + rfit*np.cos(thetamodel*np.pi/180)
-					yfit = hfit + rfit*np.sin(thetamodel*np.pi/180)
-					xfit = xfit[np.where(yfit > 0)]
-					yfit = yfit[np.where(yfit > 0)]
-					axes[j].imshow(gradient.T,origin="lower")
-					axes[j].scatter(xfit,yfit,color='r',marker='x',sizes=[15]*len(xfit))
-					axes[j].axvline(xsplit,color='r',linestyle="dashed")
-					axes[j].set_xlabel("x (nm)")
-					axes[j].set_ylabel("z (nm)")
-					axes[j].set_title(f"t={round(time_ns,3)}ns, θ={round(contact_angle,3)}°")
+			if (len(yarc) > 0) and (len(xarc) == len(yarc)):
+				ymaxidx = np.argmax(yarc)
+				xsplit = xarc[ymaxidx]
+				# now do a broader scan from (xsplit, y0) on either side to obtain advancing and receding contact angle
+				for j in [0,1]:
+					thetascan = (-180*j) + np.arange(91,271,0.1)
+					xarc, yarc = angularscan(gradient,(xsplit,y0),thetascan,2)
+					arc = np.array((xarc,yarc)).T # for loss function
+					r = np.add((xarc-xsplit)**2,(yarc-y0)**2)**0.5
+					radius_guess = np.mean(r)
+					rinit = np.mean(r)
+					[rfit, hfit] = basinhopping(arcLoss,[rinit,y0],niter=500,T=0.7,stepsize=0.1,minimizer_kwargs={"bounds":[(0.25*rinit,4*rinit),(-2*rinit,2*rinit)]}).x
+					axes[j].scatter([xsplit],[hfit],color='r',marker='x')
+					if hfit <= rfit: 
+						contact_angle = 90 + (180/np.pi) * np.arcsin(hfit/rfit)
+						if j == 0: 
+							forward[i] = contact_angle
+						else: 
+							backward[i] = contact_angle		
+						thetamodel = (-90*j) + np.arange(45,226,8) # range of model to output
+						xfit = xsplit + rfit*np.cos(thetamodel*np.pi/180)
+						yfit = hfit + rfit*np.sin(thetamodel*np.pi/180)
+						xfit = xfit[np.where(yfit > 0)]
+						yfit = yfit[np.where(yfit > 0)]
+						axes[j].imshow(gradient.T,origin="lower")
+						axes[j].scatter(xfit,yfit,color='r',marker='x',sizes=[15]*len(xfit))
+						axes[j].axvline(xsplit,color='r',linestyle="dashed")
+						axes[j].set_xlabel("x (nm)")
+						axes[j].set_ylabel("z (nm)")
+						axes[j].set_title(f"t={round(time_ns,3)}ns, θ={round(contact_angle,3)}°")
+			else:
+				pass
 		pngfile = args.output.strip(".npy") + ".rho_" + str(i) + ".png"
 		plt.savefig(pngfile,bbox_inches="tight")
 		img = cv2.imread(pngfile)
