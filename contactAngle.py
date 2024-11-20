@@ -195,11 +195,20 @@ if doAnalyze:
 	print(f"{densities.shape[0]} gradient snapshots to fit circles to")
 	# iterate over snapshots, measure forward, backward angles for each and save to output later
 	# contact angle hysteresis for dynamic case calculated as per method in DOI: 10.1021/acs.langmuir.9b00551 
+
+
+	# only last half for initial shape
+	#nUse = int(0.5*densities.shape[0])
+	#field = np.mean(densities[nUse:,:,:],axis=0)
+	#(X,Y) = densities.shape 
+	#densities = np.reshape(densities,(1,X,Y))
+
 	forward = np.zeros(densities.shape[0])
 	backward = np.zeros(densities.shape[0])
 	times = np.zeros(densities.shape[0]) # sim time ns
 	img_array = [] # for video
 	timestart = time.time()
+
 	for i in range(densities.shape[0]):
 		plt.rcParams['figure.figsize'] = (15,5)
 		plt.rcParams['font.size'] = 20
@@ -219,7 +228,7 @@ if doAnalyze:
 			arc = np.array((xarc,yarc)).T # for loss function
 			r = np.add((xarc-x0)**2,(yarc-y0)**2)**0.5 # array of distances of ground truth points from center
 			rinit = np.mean(r)
-			[rfit, hfit] = basinhopping(arcLoss,[rinit,y0],niter=500,T=0.7,stepsize=0.1,minimizer_kwargs={"bounds":[(0.25*rinit,4*rinit),(-2*rinit,2*rinit)]}).x
+			[rfit, hfit] = basinhopping(arcLoss,[rinit,y0],niter=1000,T=0.7,stepsize=0.1,minimizer_kwargs={"bounds":[(0.25*rinit,4*rinit),(-2*rinit,2*rinit)]}).x
 			axes.scatter([xsplit],[hfit],color='r',marker='x')
 			if hfit <= rfit: # otherwise skip this snapshot
 				contact_angle = 90 + (180/np.pi) * np.arcsin(hfit/rfit)
@@ -237,6 +246,7 @@ if doAnalyze:
 				axes.set_ylabel("z (nm)")
 				axes.set_title(f"t={round(time_ns,3)}ns, θ={round(contact_angle,3)}°")
 		elif args.mode == "dynamic":
+			print(f"Fitting snapshot {i}")
 			fig, axes = plt.subplots(1,2)
 			# find x index of highest point
 			# do a dense angular scan to find ground truth points, then given [(x,y),(x,y)...], find index of point with maximum y
@@ -248,21 +258,29 @@ if doAnalyze:
 				xsplit = xarc[ymaxidx]
 				# now do a broader scan from (xsplit, y0) on either side to obtain advancing and receding contact angle
 				for j in [0,1]:
-					thetascan = (-180*j) + np.arange(91,271,0.1)
+					thetascan = (-180*j) + np.arange(90,271,0.1)
 					xarc, yarc = angularscan(gradient,(xsplit,y0),thetascan,2)
 					arc = np.array((xarc,yarc)).T # for loss function
 					r = np.add((xarc-xsplit)**2,(yarc-y0)**2)**0.5
 					radius_guess = np.mean(r)
 					rinit = np.mean(r)
-					[rfit, hfit] = basinhopping(arcLoss,[rinit,y0],niter=500,T=0.7,stepsize=0.1,minimizer_kwargs={"bounds":[(0.25*rinit,4*rinit),(-2*rinit,2*rinit)]}).x
+					print(f"Initial guess: [{rinit}, {y0}]")
+					[rfit, hfit] = basinhopping(arcLoss,[rinit,y0],niter=2000,T=0.7,stepsize=0.1,minimizer_kwargs={"bounds":[(0.25*rinit,4*rinit),(-2*rinit,2*rinit)]}).x
+					print(f"Optimized guess: [{rfit}, {hfit}]")
 					axes[j].scatter([xsplit],[hfit],color='r',marker='x')
 					if hfit <= rfit: 
 						contact_angle = 90 + (180/np.pi) * np.arcsin(hfit/rfit)
+						# !! when hift > rfit
 						if j == 0: 
+							print("Forward")
 							forward[i] = contact_angle
+							print(f"theta: {contact_angle}")
+							thetamodel = np.arange(90,270,8)
 						else: 
-							backward[i] = contact_angle		
-						thetamodel = (-90*j) + np.arange(45,226,8) # range of model to output
+							print("Backward")
+							backward[i] = contact_angle	
+							print(f"theta: {contact_angle}")	
+							thetamodel = np.arange(-90,90,8)
 						xfit = xsplit + rfit*np.cos(thetamodel*np.pi/180)
 						yfit = hfit + rfit*np.sin(thetamodel*np.pi/180)
 						xfit = xfit[np.where(yfit > 0)]
@@ -321,4 +339,4 @@ if doAnalyze:
 	axes.set_ylabel("Hysteresis (°)")
 	axes.axhline(0,linestyle="dashed",color='k')
 	plt.savefig(pngfile,bbox_inches="tight")
-	for fname in glob.iglob(args.output.strip(".npy") + ".rho_*.png"): os.system(f"rm {fname}") # delete generated images 
+	#for fname in glob.iglob(args.output.strip(".npy") + ".rho_*.png"): os.system(f"rm {fname}") # delete generated images 
