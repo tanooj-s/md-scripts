@@ -13,7 +13,6 @@ import matplotlib.pyplot as plt
 
 parser = argparse.ArgumentParser(description="calculate density profiles")
 parser.add_argument('-i', action="store", dest="input")
-parser.add_argument('-o', action="store", dest="output")
 parser.add_argument('-dz', action="store", dest="dz") # bin width 
 parser.add_argument('-minz', action="store", dest="minz")
 parser.add_argument('-maxz', action="store", dest="maxz")
@@ -41,7 +40,7 @@ def isfloat(s): # hack function to confirm tokens are numeric as floats
 print(f'MinZ: {minz}')
 print(f'MaxZ: {maxz}')
 nBins = int((maxz-minz)/dz) + 1
-densities = np.zeros((1+len(atom_types), nBins)) # output array
+rho = np.zeros((1+len(atom_types), nBins)) # output array
 # print out which atom type is which row in output array
 for i1, i2 in enumerate(atom_types):
 	print(f'Row {i1+1} | Atom type {i2}') # 0 will be zs
@@ -64,7 +63,12 @@ with open(args.input,'r') as f:
 			zIdx = tokens.index('z') - 2
 print(f'{idIdx} {typeIdx} {xIdx} {yIdx} {zIdx}')
 
-print("Parsing and analyzing dump directly to calculate densities...")
+
+# add mean field normalization
+# which is just the average number of particles within a dz bin (i.e. an x-y thin slab)
+
+
+print("Parsing and analyzing dump directly to calculate rho...")
 timestart = time.time()
 with open(args.input,'r') as f:
 	nCollected = 0 # timesteps summed over
@@ -83,8 +87,8 @@ with open(args.input,'r') as f:
 				if (aType in atom_types) and (z >= minz) and (z <= maxz):
 					idx1 = atom_types.index(aType) # index atom type along first axis of output array
 					binIdx = int((z - minz)/dz)
-					densities[idx1, binIdx] += 1
-					densities[-1, binIdx] += 1 # species blind
+					rho[idx1, binIdx] += 1
+					rho[-1, binIdx] += 1 # species blind
 		if (currentTime > start) and (previousLine.startswith('ITEM: ATOMS')):
 			doCollect = True
 			nCollected += 1
@@ -92,42 +96,21 @@ with open(args.input,'r') as f:
 			currentTime = int(tokens[0])
 		previousLine = line
 print(f'{round((time.time()-timestart)/60,4)} minutes')
-densities /= nCollected
-print(densities.shape)
-print(f'{nCollected} timesteps collected for densities')
+rho /= nCollected
+print(rho.shape)
+print(f'{nCollected} timesteps collected')
+
 # append z values (i.e. x axis of histograms) as first row
 zs = np.arange(minz,maxz+0.1*dz,dz) # hack
 print(zs.shape)
-assert len(zs) == densities.shape[1]
-zs = np.reshape(zs, (1, densities.shape[1]))
-densities = np.concatenate((zs,densities))
-with open(args.output+".rho_z.npy",'wb') as f: np.save(f, densities)
+assert len(zs) == rho.shape[1]
+zs = np.reshape(zs, (1, rho.shape[1]))
+rho = np.concatenate((zs,rho))
 
+# actually normalize so that each computed distribution adds up to 1
+N = np.trapz(x=rho[0],y=rho[1:]) # note this is broadcasting every integrand to each separate profile
+N = np.reshape(N,(N.shape[0],1))
+N = np.tile(N,rho.shape[1])
+rho[1:] /= N
 
-# normalization, plot profile for each species and net
-# only consider profiles out to 4 nm
-# everything below is for a specific system and not general but make it general later
-rho = densities
-idx = int(40/dz) + 1
-z = dz * np.arange(0,len(rho[0][:idx]),1)
-
-pltwidth = 12
-pltheight = int(np.ceil((rho.shape[0]-1) * 3.))
-fig, axes = plt.subplots(rho.shape[0]-1,1,sharex=True)
-plt.rcParams['figure.figsize'] = (pltwidth,pltheight)
-ionMap = {1: 'F', 2: 'Li', 3: 'Na', 4: 'K', 5: 'Net'}
-for i in range(1+len(atom_types)):
-    rho_i = rho[i+1][:idx]
-    N_i = np.trapz(x=z,y=rho_i) # normalization factor up to this z (TODO move normalization up)
-    rho_i /= N_i
-    axes[i].plot(z,rho_i,label=f"{ionMap[i+1]}",lw=2)
-    # plot long range value 
-    limit_val = np.mean(rho_i[-30:])
-    axes[i].axhline(limit_val,color='k',linestyle='dashed')
-    axes[i].legend(loc="upper right")
-    axes[i].grid()
-    axes[i].set_ylim(0,2*limit_val)
-axes[-1].set_xlabel("z (Å)")
-axes[0].set_title("Ion density profiles ρ(z)")
-plt.tight_layout()
-plt.savefig(args.output+".rho_z.png")
+with open(args.input[:-5]+".rho_z.npy",'wb') as f: np.save(f, rho)
