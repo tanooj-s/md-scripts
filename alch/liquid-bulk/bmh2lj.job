@@ -1,4 +1,0 @@
-#!/bin/bash
-#SBATCH -n 16 -N 1 -t 48:00:00 --hint=nomultithread -o %j.LOG
-# -x cpu[1001-1006]
-mpirun /home/tanooj/lammps-23Jun2022/build/lmp -i bmh2lj.in -v T $1 -v lambda $2

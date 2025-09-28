@@ -34,7 +34,6 @@ with open(args.input,'r') as f:
 	nline = 0
 	for line in f:
 		tokens = purge(line.strip('\n').split(' '))
-		print(tokens)
 		if nline == 7: 
 			minz, maxz = float(tokens[0]), float(tokens[1])
 			break
@@ -45,7 +44,6 @@ print(f"maxz: {maxz}")
 
 nbins = int((maxz-minz)/dz) + 1
 rho = np.zeros((1+len(atom_types), nbins)) # output array
-# print out which atom type is which row in output array
 
 # last is species blind
 
@@ -93,11 +91,8 @@ print(f'{round((time.time()-timestart)/60,4)} minutes')
 print(f'{nCollected} timesteps collected')
 
 rho /= nCollected
-print(rho.shape)
-
 # append z values (i.e. x axis of histograms) as first row
 zs = minz + dz*np.arange(0,rho.shape[1],1)
-print(zs.shape)
 assert len(zs) == rho.shape[1]
 zs = np.reshape(zs, (1, rho.shape[1]))
 rho = np.concatenate((zs,rho))
