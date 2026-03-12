@@ -1,133 +1,186 @@
-# read in a LAMMPS interface dump file, calculate z-resolved pressures profiles
-# (could be used for surface tension calculations)
-# output a numpy array of shape (4, nbins), where rows are (z,pxx,pyy,pzz)
-# needs a dump file with compute stress/atom per atom values
+# bin and plot 1d pressure as a function of z 
+# arguments are inputfile, dz, zlo, zhi
 
-# (from LAMMPS documentation below)
-# Note that as defined in the formula, per-atom stress is the negative of the per-atom pressure tensor. 
-# It is also really a stress*volume formulation, meaning the computed quantity is in units of pressure*volume
-# lammps stress tensor compute format xx yy zz xy xz yz
 
-import argparse
 import numpy as np
-from tqdm import tqdm
+import os
+import sys
+import matplotlib.pyplot as plt
 
-parser = argparse.ArgumentParser(description="calculate density profiles")
-parser.add_argument('-i', action="store", dest="input")
-parser.add_argument('-o', action="store", dest="output")
-parser.add_argument('-dz', action="store", dest="dz") # bin width 
-parser.add_argument('-minz', action="store", dest="minz")
-parser.add_argument('-maxz', action="store", dest="maxz")
-#parser.add_argument('-t', action="store", dest="atom_types") # atom types to calculate density profiles for, string like '1 3 4'
-args = parser.parse_args()
+inputfile = sys.argv[1]
+dz = float(sys.argv[2])
+zlo = float(sys.argv[3])
+zhi = float(sys.argv[4]) # these you need to rationally set from the dump file in ovito 
 
-dz = float(args.dz)
-minz = float(args.minz)
-maxz = float(args.maxz)
-#atom_types = [int(t) for t in args.atom_types.split(' ')]
-#print(f'Atom types to bin: {atom_types}')
+# unit conversion factors
+eV_per_cubic_angstrom_to_gigapascal = 160.2176634 
 
-def purge(tokens): return [t for t in tokens if len(t) >= 1] # purge empty strings from token lists
+# ---------------
 
+def purge(tokens): 
+	return [t for t in tokens if len(t) >= 1]
 
-# ---- parse LAMMPS dump file ----
-print("Parsing dump file...")
-tsHeadIdxs = []
-nHeadIdxs = []
-boxHeadIdxs = []
-atomHeadIdxs = []
-with open(args.input,'r') as f: lines = f.readlines()
-lines = [l.strip('\n') for l in tqdm(lines)]
-linecounter = 0
-for line in tqdm(lines):
-	if line.startswith("ITEM: TIMESTEP"): tsHeadIdxs.append(linecounter)
-	if line.startswith("ITEM: NUMBER"): nHeadIdxs.append(linecounter)
-	if line.startswith("ITEM: BOX BOUNDS"): boxHeadIdxs.append(linecounter)
-	if line.startswith("ITEM: ATOMS"): atomHeadIdxs.append(linecounter)
-	linecounter += 1
+def moving_avg(x,n): 
+	# moving average of multiple numpy arrays
+	if len(x.shape) > 1:
+		avg_arr = []
+		for i in range(x.shape[1]): 
+			avg_arr.append(np.convolve(x[:,i],np.ones(n),mode='valid')/n)
+		avg_arr = np.array(avg_arr).T
+		return avg_arr
+	else:
+		return np.convolve(x,np.ones(n),mode='valid') / n
 
-boxBoundLines = []
-atomLines = []
-nAtoms = int(lines[nHeadIdxs[0]+1]) # assume constant N
-nUse = int(0.5*len(tsHeadIdxs)) # choose length of trajectory to analyze, might want to make this a flag
-tsHeadIdxs = tsHeadIdxs[-nUse:]
-nHeadIdxs = nHeadIdxs[-nUse:]
-boxHeadIdxs = boxHeadIdxs[-nUse:]
-atomHeadIdxs = atomHeadIdxs[-nUse:]
-print(f"Timesteps to average over: {len(tsHeadIdxs)}")
-for idx in boxHeadIdxs:
-	boxBoundLines.append(lines[idx+1:idx+4])
-for idx in atomHeadIdxs:
-	atomLines.append(lines[idx+1:idx+nAtoms+1])
+def isfloat(s): 
+	# hack function to confirm tokens are numeric as floats
+	try:
+		float(s)
+		return True
+	except ValueError:
+		return False
+
+# ----------------
+
+# two passes 
+# compute trajectory of box bounds, atom_data in first pass
+# then bin data afterwards 
+# you can just keep appending and reshape afterwards
+# wtf
+# all my old code was so shit 
 
 
+timesteps = []
+natoms = [] 
+bounds = []
+# timeseries of profiles
+atom_data = [] # atom_data reshaping only works if N is constant 
 
-#  ---- infer dump format from first atom header ----
-atomHeader = lines[atomHeadIdxs[0]].split(' ')
-idIdx = atomHeader.index('id') - 2
-typeIdx = atomHeader.index('type') - 2
-xIdx = atomHeader.index('x') - 2
-yIdx = atomHeader.index('y') - 2
-zIdx = atomHeader.index('z') - 2
-# components of stress tensor
-xxIdx = atomHeader.index('c_1[1]') - 2
-yyIdx = atomHeader.index('c_1[2]') - 2
-zzIdx = atomHeader.index('c_1[3]') - 2 # edit as appropriate for off diagonal components
-print(f'Dump format: {atomHeader}')
+# timeseries of (3,2) shaped objects 
+with open(inputfile,'r') as f:
+	previousline = ""
+	for line in f:
+		tokens = purge(line.strip('\n').split(' '))
+		if len(tokens) == 2:
+			checksum = np.sum([not isfloat(t) for t in tokens])
+			if checksum == 0:
+				bounds.append(np.array([float(tokens[0]),float(tokens[1])]))
+		if len(tokens) == 1 and previousline.startswith("ITEM: TIMESTEP"):
+			timesteps.append(int(tokens[0]))
+		if len(tokens) == 1 and previousline.startswith("ITEM: NUMBER"):
+			natoms.append(int(tokens[0]))
+		elif len(tokens) > 6 and not line.startswith("ITEM: ATOMS"):
+			# we only want x, y, z, c_1[1], c_1[2], c_1[3]
+			x, y, z = float(tokens[2]), float(tokens[3]), float(tokens[4])
+			sxx, syy, szz = float(tokens[5]), float(tokens[6]), float(tokens[7])
+			atom_data.append(np.array([x,y,z,sxx,syy,szz]))
+		previousline = line
+timesteps = np.array(timesteps)
+bounds = np.array(bounds)
+atom_data = np.array(atom_data)
+natoms = np.array(natoms) 
 
-# get box dimensions for volume normalization
-xlo, xhi = float(lines[boxHeadIdxs[0]+1].split(' ')[0]), float(lines[boxHeadIdxs[0]+1].split(' ')[1])
-ylo, yhi = float(lines[boxHeadIdxs[0]+2].split(' ')[0]), float(lines[boxHeadIdxs[0]+2].split(' ')[1])
-zlo, zhi = float(lines[boxHeadIdxs[0]+3].split(' ')[0]), float(lines[boxHeadIdxs[0]+3].split(' ')[1])
+# bin separately 
+N = natoms[0] # this isn't changing in regular sims
+bounds = bounds.reshape((timesteps.shape[0],int(bounds.shape[0]/timesteps.shape[0]),2))
+atom_data = atom_data.reshape((timesteps.shape[0],int(atom_data.shape[0]/timesteps.shape[0]),atom_data.shape[1]))
+print(bounds.shape)
+print(atom_data.shape)
+assert bounds.shape[0] == atom_data.shape[0]
 
-print(f'xlo: {xlo} A| xhi: {xhi} A')
-print(f'ylo: {ylo} A| yhi: {yhi} A')
-print(f'zlo: {zlo} A| zhi: {zhi} A')
 
-VA3 = (xhi-xlo)*(yhi-ylo)*(zhi-zlo) # volume in cubic angstroms
-Vm3 = VA3 * 1e-30 # volume in m3
-print(f'Box volume: {VA3} A^3')
 
-# ------ get nbins -----
-print(f'MinZ: {minz}')
-print(f'MaxZ: {maxz}')
-nbins = int((maxz-minz)/dz) + 1
-pxx_z = np.zeros(nbins)
-pyy_z = np.zeros(nbins)
-pzz_z = np.zeros(nbins) # compute for entire system
+# now actually compute profiles 
+nbins = int((zhi-zlo)/dz) + 1
+# histogram arrays, implicitly as a function of time averaged later
+counts_z = []
+Pzz_z = []
+Pxx_z = []
+Pyy_z = []
 
-# append z values (i.e. x axis of histograms) as first row
-zs = dz*np.arange(0,pxx_z.shape[0],1)
-assert zs.shape == pxx_z.shape
-assert zs.shape == pyy_z.shape
-assert zs.shape == pzz_z.shape
+# collect data 
+for t in range(bounds.shape[0]):
+	xlo = bounds[t][0][0]
+	xhi = bounds[t][0][1]
+	ylo = bounds[t][1][0]
+	yhi = bounds[t][1][1]
+	Lx = xhi - xlo
+	Ly = yhi - ylo
+	A = Lx * Ly
+	print(A)
+	# histograms at this timestep
+	counts_zt = np.zeros(nbins,)
+	Pzz_zt = np.zeros(nbins,)
+	Pxx_zt = np.zeros(nbins,)
+	Pyy_zt = np.zeros(nbins,)
 
-# ----- bin stress tensor computes -----
-# need to compute (pxx(z),pyy(z),pzz(z))
+	for i in range(atom_data[t].shape[0]):
+		zi = atom_data[t][i][2]
+		idx = int((zi-zlo)/dz)
+		pxx_it = -atom_data[t][i][3]
+		pyy_it = -atom_data[t][i][4]
+		pzz_it = -atom_data[t][i][5]
+		Pzz_zt[idx] += pzz_it
+		Pxx_zt[idx] += pxx_it
+		Pyy_zt[idx] += pyy_it
+		counts_zt += 1
 
-print('Passing over trajectory to compute pressure profiles...')
-for idx in tqdm(tsHeadIdxs):
-	timestep = int(lines[idx+1])
-	nAtoms = int(lines[idx+3])
-	atomlines = lines[idx+9:idx+9+nAtoms]
-	for line in atomlines:
-		tokens = purge(line.split(' '))
-		aType, z, pxx, pyy, pzz = int(tokens[typeIdx]), float(tokens[zIdx]), -float(tokens[xxIdx]), -float(tokens[yyIdx]), -float(tokens[zzIdx])
-		# these are in units of atm*A3 (assuming real units)
-		# first do per atom volume normalization to get units of atm
-		for p_i in [pxx, pyy, pzz]: p_i /= (VA3*nbins) # confirm factor of 3 not needed for individual components
-		for p_i in [pxx, pyy, pzz]: p_i *= 101325 # convert atm to Pa (edit as necessary)
-		
-		if ((z < maxz) and (z > minz)): # explicit check in case of weirdness
-			binIdx = int((z - minz)/dz)
-			pxx_z[binIdx] += pxx
-			pyy_z[binIdx] += pyy
-			pzz_z[binIdx] += pzz
+	# number normalization
+	Pzz_zt = np.divide(Pzz_zt,counts_zt,out=np.zeros_like(Pzz_zt,dtype=float),where=counts_zt!=0)
+	Pxx_zt = np.divide(Pxx_zt,counts_zt,out=np.zeros_like(Pxx_zt,dtype=float),where=counts_zt!=0)
+	Pyy_zt = np.divide(Pyy_zt,counts_zt,out=np.zeros_like(Pyy_zt,dtype=float),where=counts_zt!=0)
+	# volume normalization
+	Pzz_zt /= dz*A
+	Pxx_zt /= dz*A
+	Pyy_zt /= dz*A
 
-pxx_z /= len(tsHeadIdxs) # normalize
-pyy_z /= len(tsHeadIdxs)
-pzz_z /= len(tsHeadIdxs)
+	Pzz_z.append(Pzz_zt)
+	Pxx_z.append(Pxx_zt)
+	Pyy_z.append(Pyy_zt)
 
-pressures = np.vstack((zs,pxx_z,pyy_z,pzz_z)) 
-with open(args.output,'wb') as f: np.save(f, pressures)
+
+# cast and convert cubic angstrom to gigapascal
+Pzz_z = np.array(Pzz_z) * eV_per_cubic_angstrom_to_gigapascal
+Pxx_z = np.array(Pxx_z) * eV_per_cubic_angstrom_to_gigapascal
+Pyy_z = np.array(Pyy_z) * eV_per_cubic_angstrom_to_gigapascal
+
+print(Pzz_z.shape)
+print(Pxx_z.shape)
+print(Pyy_z.shape)
+
+Pzz_z = np.mean(Pzz_z,axis=0)
+Pxx_z = np.mean(Pxx_z,axis=0)
+Pyy_z = np.mean(Pyy_z,axis=0)
+
+
+# convert to normal and tangential 
+Pn_z = Pzz_z
+Pt_z = 0.5*(Pxx_z+Pyy_z)
+
+
+# moving average to plot out 
+# denoise
+moving_avg_wdw = 20
+Pn_z = moving_avg(Pn_z,moving_avg_wdw)
+Pt_z = moving_avg(Pt_z,moving_avg_wdw)
+z = dz*np.arange(0,Pn_z.shape[0],1)
+
+
+
+# plot for debugging
+
+plt.rcParams["figure.figsize"] = (8,9)
+fig, axes = plt.subplots(3,1,sharex=True)
+axes[0].plot(z,Pn_z,label="Pn")
+axes[1].plot(z,Pt_z,label="Pt")
+axes[2].plot(z,Pn_z-Pt_z,label="Pn-Pt")
+plt.tight_layout()
+plt.legend(loc="upper right")
+plt.savefig("pressure_profile_test.png")
+
+exit()
+
+
+# clearly glass interface sims are weird so need to confirm whether this is a valid strategy at all for gamma incorporating entropy
+# but should be valid for vacuum sims 
+# so I guess what I'm seeing is a nonzero pressure in the glass, but close to zero for CoSi
 
